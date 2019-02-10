@@ -11,15 +11,18 @@ __status__ = "Testing"
 """
 
 import sys, os, re
-import numpy as np
-import argparse as ap
+
 import logging
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.ERROR)
+
+import numpy as np
+import argparse as ap
 
 from beatbox.raster import Raster
 from beatbox.moving_windows import filter
+
+import enlighten
 
 # define handlers for argparse for any arguments passed at runtime
 example_text = str(
@@ -89,7 +92,7 @@ parser.add_argument(
     '-d',
     '--debug',
     help='Enable verbose logging interface for debugging',
-    type=str,
+    action='store_true',
     required=False
 )
 
@@ -98,7 +101,11 @@ args = vars(parser.parse_args())
 # -d/--debug
 if not args['debug']:
     # disable logging unless asked by the user
+    logger = logging.getLogger(__name__)
     logger.disabled = True
+else:
+    logger = logging.getLogger(__name__)
+    logger.disabled = False
 
 # standard numpy functions that we may have
 # non-generic ndimage filters available for
@@ -183,7 +190,7 @@ if __name__ == "__main__":
         manager = enlighten.get_manager()
         progress = manager.counter(
             total=len(_MATCH_ARRAYS),
-            desc='Rasters',
+            desc='Processing Moving Windows',
             unit='ticks')
     # perform any re-classification requests prior to our ndimage filtering
     if _MATCH_ARRAYS:
