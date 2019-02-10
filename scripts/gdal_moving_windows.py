@@ -97,7 +97,7 @@ if not args['debug']:
     # disable logging unless asked by the user
     logger.disabled = True
 
-from beatbox import Raster
+from beatbox.raster import Raster
 from beatbox.moving_windows import filter
 
 # standard numpy functions that we may have
@@ -125,11 +125,6 @@ def get_numpy_function(user_fun_str=None):
             return _NUMPY_STR_TO_FUNCTIONS[np_function_str]
     # default case
     return None
-
-def cat(string=None):
-    ''' print minus the implied \n'''
-    sys.stdout.write(string)
-    sys.stdout.flush()
 
 if __name__ == "__main__":
     # required parameters
@@ -183,9 +178,15 @@ if __name__ == "__main__":
         "with the -r argument at runtime. see -h for usage.")
     #
     r = Raster(_INPUT_RASTER)
+    # Progress reporting for sequences
+    manager = enlighten.get_manager()
+    pbar = manager.counter(total=len(_MATCH_ARRAYS), desc='Ticks', unit='ticks')
     # perform any re-classification requests prior to our ndimage filtering
     if _MATCH_ARRAYS:
-        cat(" -- performing moving window analyses: ")
+        logger.INFO(
+            "performing moving window analyses across "
+            + len(_MATCH_ARRAYS) + " windows"
+        )
         for m in _MATCH_ARRAYS:
             focal = r
             if _MATCH_ARRAYS[m] is not None:
@@ -193,20 +194,22 @@ if __name__ == "__main__":
                     raster=focal,
                     match=_MATCH_ARRAYS[m])
             for window in _WINDOW_DIMS:
+                logger.info("Processing step %s" % i)
                 filename=str(_OUTFILE_NAME+"_"+str(window)+"x"+str(window))
                 filter(
                     r = focal,
                     function = _FUNCTION,
                     size = window,
                     dest_file = filename)
-                '['+str(round(([i+1 for i,x in enumerate(_WINDOW_DIMS) if x == window][0] / len(_WINDOW_DIMS))*100))+'%]'
+                pbar.update()
     # otherwise just do our ndimage filtering
     else:
         for window in _WINDOW_DIMS:
+            logger.info("Processing step %s" % i)
             filename = str(_OUTFILE_NAME+"_"+str(window)+"x"+str(window))
             test = filter(
                 r = r,
                 function = _FUNCTION,
                 size = window,
                 dest_filename = filename)
-            '['+str(round(([i+1 for i,x in enumerate(_WINDOW_DIMS) if x == window][0] / len(_WINDOW_DIMS))*100))+'%]'
+            pbar.update()

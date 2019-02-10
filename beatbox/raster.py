@@ -10,6 +10,10 @@ __maintainer__ = "Kyle Taylor"
 __email__ = "kyle.taylor@pljv.org"
 __status__ = "Testing"
 
+# logging
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 # mmap file caching and file handling
 import sys
 from random import randint
@@ -24,10 +28,6 @@ from osgeo import gdal_array
 # memory profiling
 import types
 import psutil
-# logging
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 # Fickle beast handlers for Earth Engine
 try:
     import ee
@@ -97,7 +97,7 @@ class Raster(object):
             self.dtype = dtype
         # args[3]/disc_cache=
         if disc_caching is not None:
-            self._using_disc_caching = str(randint(1, 9999999999)) + \
+            self._using_disc_caching = str(randint(1, 9E09)) + \
                                        '_np_binary_array.dat'
         # if we were passed a file argument, assume it's a
         # path and try to open it
@@ -169,8 +169,8 @@ class Raster(object):
             self.ndv, self.x_cell_size, self.y_cell_size, self.geot, self.projection, self.dtype = \
                 get_geo_info(file)
         except Exception:
-            raise AttributeError("problem processing file input -- is this",
-                                 "a raster file?")
+            raise AttributeError("problem processing file input -- is this" +
+                "a raster file?")
         # args[1]/dtype=
         if dtype is not None:
             # override our shadow'd value from GeoRasters if
