@@ -1,2 +1,0 @@
-            ndv, x_cell_size, y_cell_size,\
-            geot, projection, dtype = get_geo_info(file)
