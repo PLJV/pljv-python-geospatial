@@ -63,9 +63,7 @@ _DEFAULT_NA_VALUE = 0
 _DEFAULT_PRECISION = np.uint16
 
 class Raster(object):
-
-    """
-    Raster class is a wrapper for generating GeoRasters,
+    """ Raster class is a wrapper for generating GeoRasters,
     Numpy arrays, and Earth Engine Image objects. It opens files
     and converts to other formats as needed for various backend
     actions associated with Do.
@@ -76,19 +74,19 @@ class Raster(object):
 
     def __init__(self, filename=None, array=None, dtype=None,
                  disc_caching=None):
-        # Privates
+        # Hidden properties manipulated by setters/getters
         self._backend = "local"
         self._array = None
         self._filename = None
         self._using_disc_caching = None  # Use mmcache?
-        # Public properties (maintained for GeoRasters)
+        # Public properties (maintained for GeoRasters compatibility)
         self.ndv = _DEFAULT_NA_VALUE # no data value
         self.x_cell_size = None  # cell size of x (meters/degrees)
         self.y_cell_size = None  # cell size of y (meters/degrees)
         self.geot = None         # geographic transformation
         self.projection = None   # geographic projection
         self.dtype = _DEFAULT_PRECISION
-        # args[0]/file=
+        # args[0]/filename=
         self.filename = filename
         # args[1]/array=
         self.array = array
@@ -156,8 +154,7 @@ class Raster(object):
         self._backend = args[0]
 
     def open(self, file=None, dtype=None):
-        """
-        Open a local file handle for reading and assignment
+        """ Open a local file handle for reading and assignment
         :param file:
         :return: None
         """
@@ -166,8 +163,8 @@ class Raster(object):
             raise IndexError("invalid file= argument provided")
         # grab raster meta information from GeoRasters
         try:
-            self.ndv, self.x_cell_size, self.y_cell_size, self.geot, self.projection, self.dtype = \
-                get_geo_info(file)
+            self.ndv, self.x_cell_size, self.y_cell_size,
+            self.geot, self.projection, self.dtype = get_geo_info(file)
         except Exception:
             raise AttributeError("problem processing file input -- is this" +
                 "a raster file?")
@@ -208,8 +205,8 @@ class Raster(object):
         )
 
     def write(self, dst_filename=None, format=gdal.GDT_UInt16, driver=gdal.GetDriverByName('GTiff')):
-        """
-        Wrapper for GeoRaster's create_geotiff that writes a numpy array to disk.
+        """ Wrapper for GeoRaster's create_geotiff that writes a numpy array to
+        disk.
         :param dst_filename:
         :param format:
         :param driver:
@@ -230,15 +227,13 @@ class Raster(object):
         )
 
     def to_numpy_array(self):
-        """
-        Returns the Numpy array values for our Raster object.
+        """ Returns numpy array values for our Raster object.
         :return:
         """
         return self.array
 
     def to_georaster(self):
-        """
-        Parses internal Raster elements and returns as a clean GeoRaster
+        """ Parses internal Raster elements and returns as a clean GeoRaster
         object.
         :return:
         """
@@ -251,8 +246,7 @@ class Raster(object):
         )
 
     def to_ee_image(self):
-        """
-        Parses our internal numpy array as an Earth Engine ee.array object.
+        """ Parses our internal numpy array as an Earth Engine ee.array object.
         Would like to see this eventually become a standard interface for
         dynamically ingesting raster data on Earth Engine, but it's currently
         broken
@@ -267,17 +261,14 @@ def crop(*args):
 
 
 def extract(*args):
-    """
-    Extract wrapper function that will accept a series of 'with' arguments
-    and use an appropriate backend to perform an extract operation with
-    raster data
+    """ Accept a series of 'with' arguments and uses an appropriate backend to
+    perform an extract operation with raster data
     :param args:
     :return:
     """
 
 def binary_reclassify(array=None, match=None, *args):
-    """
-    Generalized version of binary_reclassify that can accomodate
+    """ Generalized version of binary_reclassify that can accomodate
     a local numpy array or processing on EE
     :param args:
     :return:
@@ -314,14 +305,13 @@ def binary_reclassify(array=None, match=None, *args):
 
 def _local_binary_reclassify(raster=None, match=None, invert=None,
                              dtype=np.uint8):
-    """ binary reclassification of input data. All cell values in
+    """ Binary reclassification of input data. All cell values in
     a numpy array are reclassified as uint8 (boolean) based on
     whether they match or do not match the values of an input match
     array.
-    :param: args0 : a Raster, GeoRaster, or related generator object
-    :param: args1 : a list object of integers specifying match values for
-    :param: raster : keyword version of args0
-    :param: match : keyword version of args1
+    :param: raster : a Raster, GeoRaster, or related generator object
+    :param: match : a list object of integers specifying match values
+    for reclassification
     """
     # args[0]/raster=
     if raster is None:
@@ -362,7 +352,7 @@ def _local_binary_reclassify(raster=None, match=None, invert=None,
              for i, d in enumerate(raster)]
         )
     else:
-        raise ValueError("raster= input should be a Raster, GeoRaster, or",
+        raise ValueError("raster= input should be a Raster, GeoRaster, or"
                          "Generator that numpy can work with")
 
 
@@ -371,7 +361,8 @@ def _local_reclassify(*args):
 
 
 def _local_crop(raster=None, shape=None, *args):
-    """ wrapper for georasters.clip that will preform a crop operation on our input raster"""
+    """ Wrapper for georasters.clip that will preform a crop operation on
+    input raster"""
     # args[0] / raster=
     if raster is None:
         raise IndexError("invalid raster= argument specified")
@@ -385,13 +376,13 @@ def _local_crop(raster=None, shape=None, *args):
         logger.warning(" There doesn't apprear to be enough free memory"
                        " available for our raster operation. You should use"
                        "disc caching options with your dataset. Est Megabytes "
-                       "needed: %s", -1*_enough_ram['bytes']*0.0000001)
+                       "needed: %s", -1 * _enough_ram['bytes'] * 1E-07)
     return raster.to_georaster().clip(shape)
 
 
 
 def _local_clip(raster=None, shape=None):
-    """clip is a hold-over from gr that performs a crop operation"""
+    """ Wrapper for a crop operation """
     # args[0]/raster=
     if raster is None:
         raise IndexError("invalid raster= argument specified")
@@ -401,16 +392,14 @@ def _local_clip(raster=None, shape=None):
     return _local_crop(raster=raster, shape=shape)
 
 def _ee_extract(*args):
-    """
-    Earth Engine extract handler
+    """ Earth Engine extract handler
     :param args:
     :return:
     """
     pass
 
 def _local_extract(*args):
-    """
-    local raster extraction handler
+    """ Local raster extraction handler
     :param args:
     :return:
     """
@@ -418,14 +407,14 @@ def _local_extract(*args):
 
 
 def _ee_extract(*args):
-    """
-    EE raster extraction handler
+    """ EE raster extraction handler
     :param args:
     :return:
     """
     if not _HAVE_EE:
         raise AttributeError("Requested Earth Engine functionality, "
-                             "but we failed to load and initialize the ee package.")
+                             "but we failed to load and initialize the ee"
+                             "package.")
 
 
 def _local_reproject(*args):
@@ -433,8 +422,7 @@ def _local_reproject(*args):
 
 
 def _local_merge(rasters=None):
-    """
-    Wrapper for georasters.merge that simplifies merging raster segments
+    """ Wrapper for georasters.merge that simplifies merging raster segments
     returned by parallel operations.
     """
     if rasters is None:
@@ -444,9 +432,8 @@ def _local_merge(rasters=None):
 
 
 def _local_split(raster=None, n=None):
-    """
-    Stump for np._array_split. splits an input array into n (mostly) equal segments,
-    possibly for a future parallel operation.
+    """ Wrapper for np._array_split. Splits an input array into n (mostly)
+    equal segments, possibly for a parallelized operation.
     """
     # args[0]/raster=
     if raster is None:
@@ -474,19 +461,16 @@ def _local_ram_sanity_check(array=None):
 
 
 def _est_free_ram():
-    """
-    Shorthand for psutil that will determine the amount of free ram
-    available for an operation. This is typically used in conjunction
-    with _est_array_size() or as a precursor to raising MemoryError
-    when working with large raster datasets
+    """ Determines the amount of free ram available for an operation. This is
+    typically used in conjunction with _est_array_size() or as a precursor
+    to raising MemoryError when working with large raster datasets
     :return: int (free ram measured in bytes)
     """
     return psutil.virtual_memory().free
 
 
 def _est_array_size(obj=None, byte_size=None, dtype=None):
-    """
-
+    """ Estimate the total size (in bytes) an array-like object will consume
     :param args:
     :return:
     """
@@ -510,14 +494,14 @@ def _est_array_size(obj=None, byte_size=None, dtype=None):
     if dtype is not None:
         _byte_size = NUMPY_TYPES[dtype.lower()](1)
     else:
-        raise IndexError("couldn't assign a default data type and an invalid ",
-                         "dtype= argument specified")
+        raise IndexError("couldn't assign a default data type and an invalid"
+                         " dtype= argument specified")
     return _array_len * sys.getsizeof(_byte_size)
 
 
 def _local_process_array_as_blocks(*args):
-    """
-    Accepts
+    """ Accepts an array object and splits in into chunks that can be handled
+    stepwise
     :param args:
     :return:
     """
@@ -530,9 +514,7 @@ def _local_process_array_as_blocks(*args):
 
 
 def _is_number(num_list=None):
-    """
-    Shorthand listcomp function that will determine whether any
-    item in a list is not a number.
+    """ Determine whether any item in a list is not a number.
     :param args[0]: a python list object
     :return: True on all integers,
     """
