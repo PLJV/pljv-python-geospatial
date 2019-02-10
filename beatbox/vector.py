@@ -34,7 +34,7 @@ try:
     import ee
     ee.Initialize()
 except Exception:
-    logger.warning(" Failed to load the Earth Engine API. "
+    logger.warning("Failed to load the Earth Engine API. "
                    "Check your installation. Will continue "
                    "to load but without the EE functionality.")
 
@@ -219,10 +219,12 @@ class Vector(object):
         # to shape geometries
         self._geometries = [shape(ft['geometry']) for ft in _features]
 
-    def read(self, filename=None, json=None):
+    def read(self, filename=None, json=None, layer=None, driver="GPKG"):
         """
         Accepts a GeoJSON string or string path to a shapefile that is read
-        and used to assign internal class variables for CRS, geometries, and schema
+        and used to assign internal class variables for CRS, geometries, and
+        schema. This is essentially just a robust wrapper for fiona.open()
+        with some sanity checking.
 
         Keyword arguments:
         filename= the full path filename to a vector dataset (typically a .shp file)
@@ -232,7 +234,7 @@ class Vector(object):
         1st = either a full path to a file or a geojson string object
         :return: None
         """
-        # args[0] / -filename / -string
+        # args[0] / -filename
         if is_valid_file(filename):
             json = None
             self.filename = filename
@@ -242,18 +244,25 @@ class Vector(object):
             self.filename = None
             self._json_string_to_shapely_geometries(string=json)            
         # by default, process this as a file and parse out or data using Fiona
-        _shape_collection = fiona.open(filename)
+        if layer:
+            _shape_collection = fiona.open(self.filename, layer=layer,
+                driver=driver
+            )
+        else:
+            _shape_collection = fiona.open(filename)
+        # assign our class private members from whatever was read
+        # from input
         self._crs = _shape_collection.crs
         self._crs_wkt = _shape_collection.crs_wkt
         # parse our dict of geometries into an actual shapely list
         self._fiona_to_shapely_geometries(geometries=_shape_collection)
         self._schema = _shape_collection.schema
-        # process our attributes
+        # process our attribute table as a pandas DataFrame
         self._attributes = pd.DataFrame(
             [dict(item['properties']) for item in _shape_collection]
         )
 
-    def write(self, filename=None, type=None):
+    def write(self, filename=None, type='ESRI Shapefile'):
         """ wrapper for fiona.open that will write in-class geometry data to disk
 
         (Optional) Keyword arguments:
@@ -264,27 +273,18 @@ class Vector(object):
         # args[0] / filename=
         if filename is not None:
             self.filename = filename
-        # args[1] / type=
-        if type is None:
-            type = 'ESRI Shapefile'  # by default, write as a shapefile
-        try:
-            # call fiona to write our geometry to disk
-            with fiona.open(
-                self.filename,
-                'w',
-                type,
-                crs=self.crs,
-                schema=self.schema
-            ) as shape:
-                # If there are multiple geometries, put the "for" loop here
-                shape.write({
-                    'geometry': mapping(self.geometries),
-                    'properties': {'id': 123},
-                })
-        except Exception:
-            raise Exception("General error encountered trying "
-                            "to call fiona.open on the input data. "
-                            "Is the file not a shapefile?")
+        # call fiona to write our geometry to disk
+        with fiona.open(
+            self.filename,
+            'w',
+            type,
+            crs=self.crs,
+            schema=self.schema
+        ) as shape:
+            shape.write({
+                'geometry': mapping(self.geometries),
+                'properties': self._attributes.to_dict(),
+            })
 
     def to_shapely_collection(self):
         """ return a shapely collection of our geometry data """
@@ -422,18 +422,18 @@ def is_valid_file(string=None):
     try:
         if os.path.exists(string):
             return True
-        else:
-            return False
     except Exception:
         return False
 
+    return False
+
 def is_json(string=None):
-    if string is None:
-        return False
-    # sneakily use json.loads() to test whether this is
-    # a valid json string
+    # lazily use json.loads() to test whether
+    # this is a valid json string
     try:
-        string = json.loads(string)
+        json.loads(string)
         return True
     except Exception:
         return False
+
+    return False
