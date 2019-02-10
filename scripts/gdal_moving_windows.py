@@ -18,6 +18,9 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+from beatbox.raster import Raster
+from beatbox.moving_windows import filter
+
 # define handlers for argparse for any arguments passed at runtime
 example_text = str(
     "example: " + sys.argv[0] +
@@ -97,9 +100,6 @@ if not args['debug']:
     # disable logging unless asked by the user
     logger.disabled = True
 
-from beatbox.raster import Raster
-from beatbox.moving_windows import filter
-
 # standard numpy functions that we may have
 # non-generic ndimage filters available for
 # specifying these in advance can really
@@ -176,11 +176,15 @@ if __name__ == "__main__":
     elif not _INPUT_RASTER:
         raise ValueError("An input raster should be specified"
         "with the -r argument at runtime. see -h for usage.")
-    #
+    # Process our raster file stepwise, per window-size
     r = Raster(_INPUT_RASTER)
-    # Progress reporting for sequences
-    manager = enlighten.get_manager()
-    pbar = manager.counter(total=len(_MATCH_ARRAYS), desc='Ticks', unit='ticks')
+    # Progress reporting for raster sequences
+    if not logger.disabled:
+        manager = enlighten.get_manager()
+        progress = manager.counter(
+            total=len(_MATCH_ARRAYS),
+            desc='Rasters',
+            unit='ticks')
     # perform any re-classification requests prior to our ndimage filtering
     if _MATCH_ARRAYS:
         logger.INFO(
@@ -190,26 +194,30 @@ if __name__ == "__main__":
         for m in _MATCH_ARRAYS:
             focal = r
             if _MATCH_ARRAYS[m] is not None:
+                logger.DEBUG("reclassifying input raster using match array: %s", m)
                 focal.array= binary_reclassify(
                     raster=focal,
-                    match=_MATCH_ARRAYS[m])
+                    match=_MATCH_ARRAYS[m]
+                )
             for window in _WINDOW_DIMS:
-                logger.info("Processing step %s" % i)
                 filename=str(_OUTFILE_NAME+"_"+str(window)+"x"+str(window))
+                logger.DEBUG("applying moving_windows.filter to reclassed "
+                "array for window size: %s", window)
                 filter(
                     r = focal,
                     function = _FUNCTION,
                     size = window,
-                    dest_file = filename)
-                pbar.update()
+                    dest_file = filename
+                )
+                if not logger.disabled : progress.update()
+
     # otherwise just do our ndimage filtering
     else:
         for window in _WINDOW_DIMS:
-            logger.info("Processing step %s" % i)
             filename = str(_OUTFILE_NAME+"_"+str(window)+"x"+str(window))
             test = filter(
                 r = r,
                 function = _FUNCTION,
                 size = window,
                 dest_filename = filename)
-            pbar.update()
+            if not logger.disabled : progress.update()

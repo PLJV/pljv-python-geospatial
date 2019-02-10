@@ -184,13 +184,12 @@ class Raster(object):
         if self._using_disc_caching is not None:
             # create a cache file
             self.array = np.memmap(
-                self._using_disc_caching, dtype=dtype, mode='w+', shape=(_x_size, _y_size)
-            )
+                self._using_disc_caching, dtype=dtype, mode='w+',
+                shape = (_x_size, _y_size))
             # load file contents into the cache
             self.array[:] = gdalnumeric.LoadFile(
                 filename=self.filename,
-                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(self.dtype)
-            )[:]
+                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(self.dtype))[:]
         # by default, load the whole file into memory
         else:
             self.array = gdalnumeric.LoadFile(
@@ -204,7 +203,8 @@ class Raster(object):
             fill_value=self.ndv
         )
 
-    def write(self, dst_filename=None, format=gdal.GDT_UInt16, driver=gdal.GetDriverByName('GTiff')):
+    def write(self, dst_filename=None, format=gdal.GDT_UInt16,
+              driver=gdal.GetDriverByName('GTiff')):
         """ Wrapper for GeoRaster's create_geotiff that writes a numpy array to
         disk.
         :param dst_filename:
@@ -281,7 +281,7 @@ def binary_reclassify(array=None, match=None, *args):
     if match is None:
         raise IndexError("invalid match= argument provided by user")
     if not _is_number(match):
-        logger.warning(" One or more values in your match array are "
+        logger.warning("One or more values in your match array are "
                        "not integers -- the reclass operation may produce "
                        "unexpected results")
     # process our array using the appropriate backend,
@@ -373,7 +373,7 @@ def _local_crop(raster=None, shape=None, *args):
     # and return to user
     _enough_ram = _local_ram_sanity_check(raster.array)
     if not _enough_ram['available'] and not raster._using_disc_caching:
-        logger.warning(" There doesn't apprear to be enough free memory"
+        logger.warning("There doesn't apprear to be enough free memory"
                        " available for our raster operation. You should use"
                        "disc caching options with your dataset. Est Megabytes "
                        "needed: %s", -1 * _enough_ram['bytes'] * 1E-07)
@@ -500,7 +500,7 @@ def _est_array_size(obj=None, byte_size=None, dtype=None):
 
 
 def _local_process_array_as_blocks(*args):
-    """ Accepts an array object and splits in into chunks that can be handled
+    """ Accepts an array object and splits it into chunks that can be handled
     stepwise
     :param args:
     :return:
