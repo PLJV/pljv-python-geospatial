@@ -163,11 +163,11 @@ class Raster(object):
             raise IndexError("invalid file= argument provided")
         # grab raster meta information from GeoRasters
         try:
-            self.ndv, self.x_cell_size, self.y_cell_size,
+            self.ndv, self.x_cell_size, self.y_cell_size,\
             self.geot, self.projection, self.dtype = get_geo_info(file)
         except Exception:
-            raise AttributeError("problem processing file input -- is this" +
-                "a raster file?")
+            raise AttributeError("problem processing file input -- is this"
+                " a raster file?")
         # args[1]/dtype=
         if dtype is not None:
             # override our shadow'd value from GeoRasters if
