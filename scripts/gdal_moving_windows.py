@@ -159,6 +159,11 @@ if __name__ == "__main__":
         _TARGET_RECLASS_VALUE = list(map(int, args['target_value'].split(',')))
     # -f/--fun
     _FUNCTION = get_numpy_function(args['fun'])
+    # figure out a good target datatype to use
+    if _FUNCTION == np.sum:
+        _TARGET_DTYPE = np.uint16
+    else:
+        _TARGET_DTYPE = np.float32
     # if this doesn't map as a numpy function, maybe it's something else
     # lurking in the global scope we can find?
     if not _FUNCTION:
@@ -222,8 +227,8 @@ if __name__ == "__main__":
                     r = focal,
                     function = _FUNCTION,
                     size = window,
-                    dest_file = filename
-                )
+                    dest_file = filename,
+                    dtype=_TARGET_DTYPE)
                 if not logger.disabled : progress.update()
 
     # otherwise just do our ndimage filtering
@@ -234,5 +239,6 @@ if __name__ == "__main__":
                 r = r,
                 function = _FUNCTION,
                 size = window,
-                dest_filename = filename)
+                dest_filename = filename
+                dtype=_TARGET_DTYPE)
             if not logger.disabled : progress.update()
