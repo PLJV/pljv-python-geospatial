@@ -20,7 +20,7 @@ import json
 import pyproj
 
 from shapely.geometry import *
-from beatbox.do import Local, EE, Do
+from .do import Local, EE, Do
 
 import logging
 
@@ -29,14 +29,14 @@ _DEFAULT_EPSG = 2163
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Fickle beast handlers for Earth Engine
-try:
-    import ee
-    ee.Initialize()
-except Exception:
-    logger.warning("Failed to load the Earth Engine API. "
-                   "Check your installation. Will continue "
-                   "to load but without the EE functionality.")
+# # Fickle beast handlers for Earth Engine
+# try:
+#     import ee
+#     ee.Initialize()
+# except Exception:
+#     logger.warning("Failed to load the Earth Engine API. "
+#                    "Check your installation. Will continue "
+#                    "to load but without the EE functionality.")
 
 
 class Vector(object):

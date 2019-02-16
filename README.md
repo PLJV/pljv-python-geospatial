@@ -35,10 +35,7 @@ From a direct download:
 From conda / pip:
 ```bash
 conda install pyCrypto GDAL numpy pandas fiona shapely geopandas scikit-learn 
-
-pip install oauth2client 
-pip install google-api-python-client
-pip install earthengine-api
+conda install -c conda-forge earthengine-api 
 
 pip install --upgrade git+git://github.com/PLJV/Beatbox.git
 ```

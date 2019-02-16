@@ -14,7 +14,7 @@ import sys, os, re
 
 import logging
 
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.CRITICAL)
 
 import numpy as np
 import argparse as ap
@@ -29,11 +29,13 @@ example_text = str(
     "example: " + sys.argv[0] +
     " -r nass_2016.tif --reclass row_crop=1,2," +
     "3;wheat=2,7 -w 3,11,33 --fun numpy.sum")
+
 descr_text = str(
     'A command-line interface for performing moving windows analyses' +
     ' on raster datasets using GDAL and numpy arrays')
 
 parser = ap.ArgumentParser(
+    prog='gdal_moving_windows.py',
     description=descr_text,
     epilog=example_text,
     formatter_class=ap.RawDescriptionHelpFormatter
@@ -69,6 +71,12 @@ parser.add_argument(
     help='Specifies the dimensions for our window(s)',
     type=str,
     required=True
+)
+
+parser.add_argument(
+    '-s',
+    '--shape',
+    help='Specifies the skew or shape parameters for your moving window. Can be \'square\', \'circle\', or \'gaussian\''
 )
 
 parser.add_argument(
@@ -191,7 +199,7 @@ if __name__ == "__main__":
         progress = manager.counter(
             total=len(_MATCH_ARRAYS),
             desc='Processing Moving Windows',
-            unit='ticks')
+            unit='window')
     # perform any re-classification requests prior to our ndimage filtering
     if _MATCH_ARRAYS:
         logger.INFO(

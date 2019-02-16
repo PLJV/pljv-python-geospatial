@@ -12,7 +12,7 @@ __status__ = "Testing"
 
 # logging
 import logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 # mmap file caching and file handling
 import sys
@@ -28,16 +28,16 @@ from osgeo import gdal_array
 # memory profiling
 import types
 import psutil
-# Fickle beast handlers for Earth Engine
-try:
-    import ee
-    ee.Initialize()
-    _HAVE_EE = True
-except Exception:
-    _HAVE_EE = False
-    logger.warning("Failed to load the Earth Engine API. "
-                   "Check your installation. Will continue "
-                   "to load but without the EE functionality.")
+# # Fickle beast handlers for Earth Engine
+# try:
+#     import ee
+#     ee.Initialize()
+#     _HAVE_EE = True
+# except Exception:
+#     _HAVE_EE = False
+#     logger.warning("Failed to load the Earth Engine API. "
+#                    "Check your installation. Will continue "
+#                    "to load but without the EE functionality.")
 
 # short-hand string identifiers for numpy
 # types. Int, float, and byte will be the
@@ -176,8 +176,11 @@ class Raster(object):
         # re-cast our datatype as a numpy type, if needed
         if type(self.dtype) == str:
             self.dtype = NUMPY_TYPES[self.dtype.lower()]
+        # set our nodata value and do a sanity check, because
+        # sometimes the raster NDV and type will disagree
         if self.ndv is None:
             self.ndv = _DEFAULT_NA_VALUE
+        self.ndv = _no_data_value_sanity_check(self)
         # low-level call to gdal with explicit type specification
         # that will store in memory or as a disc cache, depending
         # on the state of our _using_disc_caching property
@@ -185,7 +188,7 @@ class Raster(object):
             # create a cache file
             self.array = np.memmap(
                 self._using_disc_caching, dtype=dtype, mode='w+',
-                shape = (_x_size, _y_size))
+                shape = (self.x_cell_size, self.y_cell_size))
             # load file contents into the cache
             self.array[:] = gdalnumeric.LoadFile(
                 filename=self.filename,
@@ -459,6 +462,19 @@ def _local_ram_sanity_check(array=None):
         'bytes': int(_cost)
     }
 
+def _no_data_value_sanity_check(obj=None):
+    """ Checks a Raster object for a sane no data value. Occasionally a 
+    user-supplied raster file will contain a type-mismatch between the 
+    raster's no data value (e.g., a value less-than 0) and it's
+    stated data type (unsigned integer). Returns a sane no data value
+    and a warning, or the original value if is good to use.
+    """
+    if str(obj.dtype).find('u') is not -1: # are we unsigned?
+        if obj.ndv < 0:
+            logger.warning("no data value for raster object is less-than 0,"
+                "but our data type is unsigned. Forcing a no data value of 0.")
+            return(0)
+    return(obj.ndv)
 
 def _est_free_ram():
     """ Determines the amount of free ram available for an operation. This is
