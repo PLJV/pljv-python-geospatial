@@ -88,6 +88,14 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '-dt',
+    '--dtype',
+    help='Specifies the target data type for our moving windows analaysis',
+    type=str,
+    required=False
+)
+
+parser.add_argument(
     '-o',
     '--outfile',
     help='Specify an output filename to use. If multiple window sizes are specified'+
@@ -133,11 +141,12 @@ def get_numpy_function(user_fun_str=None):
     for our user-specified function string.
     :return:
     """
-    for np_function_str in list(_NUMPY_STR_TO_FUNCTIONS.keys()):
+    user_fun_str = str(user_fun_str).lower()
+    for valid_function_str in list(_NUMPY_STR_TO_FUNCTIONS.keys()):
         # user might pass a key with extra designators
         # (like np.mean, numpy.median) -- let's
-        if bool(re.search(string=str(user_fun_str), pattern=np_function_str)):
-            return _NUMPY_STR_TO_FUNCTIONS[np_function_str]
+        if bool(re.search(string=user_fun_str, pattern=valid_function_str)):
+            return _NUMPY_STR_TO_FUNCTIONS[valid_function_str]
     # default case
     return None
 
@@ -160,8 +169,8 @@ if __name__ == "__main__":
     # -f/--fun
     _FUNCTION = get_numpy_function(args['fun'])
     # figure out a good target datatype to use
-    if _FUNCTION == np.sum:
-        _TARGET_DTYPE = np.uint16
+    if args['dtype']:
+        _TARGET_DTYPE = args['dtype']
     else:
         _TARGET_DTYPE = np.float32
     # if this doesn't map as a numpy function, maybe it's something else

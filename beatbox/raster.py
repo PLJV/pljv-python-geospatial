@@ -59,6 +59,21 @@ NUMPY_TYPES = {
   "complex128": np.complex128
 }
 
+def _get_numpy_type(user_str=None):
+    """
+    Parse our NUMPY_STR dictionary using regular expressions
+    for our user-specified function string.
+    :return:
+    """
+    user_str = str(user_str).lower()
+    for valid_type_str in list(NUMPY_TYPES.keys()):
+        # user might pass a key with extra designators
+        # (like np.mean, numpy.median) -- let's
+        if bool(re.search(string=valid_type_str, pattern=user_str)):
+            return NUMPY_TYPES[valid_type_str]
+    # default case
+    return None
+
 _DEFAULT_NA_VALUE = 0
 _DEFAULT_PRECISION = np.uint16
 
@@ -175,7 +190,7 @@ class Raster(object):
             self.dtype = dtype
         # re-cast our datatype as a numpy type, if needed
         if type(self.dtype) == str:
-            self.dtype = NUMPY_TYPES[self.dtype.lower()]
+            self.dtype = _get_numpy_type(self.dtype)
         # set our nodata value and do a sanity check, because
         # sometimes the raster NDV and type will disagree
         if self.ndv is None:
