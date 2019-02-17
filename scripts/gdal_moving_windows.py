@@ -239,6 +239,6 @@ if __name__ == "__main__":
                 r = r,
                 function = _FUNCTION,
                 size = window,
-                dest_filename = filename
+                dest_filename = filename,
                 dtype=_TARGET_DTYPE)
             if not logger.disabled : progress.update()
