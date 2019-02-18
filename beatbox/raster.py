@@ -14,8 +14,10 @@ __status__ = "Testing"
 import logging
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
+
 # mmap file caching and file handling
 import sys
+import re
 from random import randint
 from copy import copy
 # raster manipulation
@@ -39,42 +41,7 @@ import psutil
 #                    "Check your installation. Will continue "
 #                    "to load but without the EE functionality.")
 
-# short-hand string identifiers for numpy
-# types. Int, float, and byte will be the
-# most relevant for raster arrays, but the
-# gang is all here
-NUMPY_TYPES = {
-  "uint8": np.uint8,
-  "int8": np.uint8,
-  "int": np.intc,
-  "byte": np.int8,
-  "uint16": np.uint16,
-  "int16": np.int16,
-  "uint32": np.uint32,
-  "int32": np.int32,
-  "float": np.single,
-  "float32": np.float32,
-  "float64": np.float64,
-  "complex64": np.complex64,
-  "complex128": np.complex128
-}
-
-def _get_numpy_type(user_str=None):
-    """
-    Parse our NUMPY_STR dictionary using regular expressions
-    for our user-specified function string.
-    :return:
-    """
-    user_str = str(user_str).lower()
-    for valid_type_str in list(NUMPY_TYPES.keys()):
-        # user might pass a key with extra designators
-        # (like np.mean, numpy.median) -- let's
-        if bool(re.search(string=valid_type_str, pattern=user_str)):
-            return NUMPY_TYPES[valid_type_str]
-    # default case
-    return None
-
-_DEFAULT_NA_VALUE = 0
+_DEFAULT_NA_VALUE = 65535
 _DEFAULT_PRECISION = np.uint16
 
 class Raster(object):
@@ -190,7 +157,7 @@ class Raster(object):
             self.dtype = dtype
         # re-cast our datatype as a numpy type, if needed
         if type(self.dtype) == str:
-            self.dtype = _get_numpy_type(self.dtype)
+            self.dtype = _to_numpy_type(self.dtype)
         # set our nodata value and do a sanity check, because
         # sometimes the raster NDV and type will disagree
         if self.ndv is None:
@@ -221,23 +188,23 @@ class Raster(object):
             fill_value=self.ndv
         )
 
-    def write(self, dst_filename=None, format=gdal.GDT_UInt16,
+    def write(self, filename=None, datatype=gdal.GDT_UInt16,
               driver=gdal.GetDriverByName('GTiff')):
         """ Wrapper for GeoRaster's create_geotiff that writes a numpy array to
         disk.
-        :param dst_filename:
+        :param filename:
         :param format:
         :param driver:
         :return:
         """
-        if not dst_filename:
-            dst_filename = self.filename
+        if not filename:
+            filename = self.filename
         return create_geotiff(
-            name=dst_filename,
+            name=filename,
             Array=self.array,
             geot=self.geot,
             projection=self.projection,
-            datatype=format,
+            datatype=datatype,
             driver=driver,
             ndv=self.ndv,
             xsize=self.x_cell_size,
@@ -269,14 +236,48 @@ class Raster(object):
         dynamically ingesting raster data on Earth Engine, but it's currently
         broken
         """
-        logger.warning("to_ee_image() is an experimental feature -- we are",
+        logger.warning("to_ee_image() is an experimental feature -- we are"
                        "still working through asset ingestion for earth engine.")
         return ee.array(self.array)
 
 
+# short-hand string identifiers for numpy
+# types. Int, float, and byte will be the
+# most relevant for raster arrays, but the
+# gang is all here
+_NUMPY_TYPES = {
+  "int": np.intc,
+  "uint8": np.uint8,
+  "int8": np.uint8,
+  "byte": np.int8,
+  "int16": np.int16,
+  "int32": np.int32,
+  "uint16": np.uint16,
+  "uint32": np.uint32,
+  "float": np.single,
+  "float32": np.float32,
+  "float64": np.float64,
+  "complex64": np.complex64,
+  "complex128": np.complex128
+}
+
+def _to_numpy_type(user_str=None):
+    """
+    Parse our NUMPY_STR dictionary using regular expressions
+    for our user-specified function string.
+    :return:
+    """
+    user_str = str(user_str).lower()
+    for valid_type_str in list(_NUMPY_TYPES.keys()):
+        # user might pass a key with extra designators
+        # (like np.mean, numpy.median) -- let's
+        if bool(re.search(string=valid_type_str, pattern=user_str)):
+            return _NUMPY_TYPES[valid_type_str]
+    # default case
+    return None
+
 def crop(*args):
     return _local_crop(args)
-
 
 def extract(*args):
     """ Accept a series of 'with' arguments and uses an appropriate backend to
@@ -478,8 +479,8 @@ def _local_ram_sanity_check(array=None):
     }
 
 def _no_data_value_sanity_check(obj=None):
-    """ Checks a Raster object for a sane no data value. Occasionally a 
-    user-supplied raster file will contain a type-mismatch between the 
+    """ Checks a Raster object for a sane no data value. Occasionally a
+    user-supplied raster file will contain a type-mismatch between the
     raster's no data value (e.g., a value less-than 0) and it's
     stated data type (unsigned integer). Returns a sane no data value
     and a warning, or the original value if is good to use.
@@ -512,22 +513,22 @@ def _est_array_size(obj=None, byte_size=None, dtype=None):
     elif isinstance(obj, GeoRaster):
         dtype = obj.datatype
         _array_len = np.prod(obj.shape)
-        _byte_size = NUMPY_TYPES[obj.datatype.lower()](1)
+        _byte_size = _to_numpy_type(obj.datatype)
     # args[0] is a Raster object
     elif isinstance(obj, Raster):
         dtype = obj.array.dtype
         _array_len = np.prod(obj.array.shape)
-        _byte_size = NUMPY_TYPES[obj.array.dtype.lower()](1)
+        _byte_size = _to_numpy_type(obj.array.dtype)
     # args[0] is something else?
     else:
         _array_len = len(obj)
     # args[1]/dtype= argument was specified
     if dtype is not None:
-        _byte_size = NUMPY_TYPES[dtype.lower()](1)
+        _byte_size = sys.getsizeof(_to_numpy_type(dtype))
     else:
         raise IndexError("couldn't assign a default data type and an invalid"
                          " dtype= argument specified")
-    return _array_len * sys.getsizeof(_byte_size)
+    return _array_len * _byte_size
 
 
 def _local_process_array_as_blocks(*args):

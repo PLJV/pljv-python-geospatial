@@ -10,19 +10,25 @@ __email__ = "kyle.taylor@pljv.org"
 __status__ = "Testing"
 """
 
-import sys, os, re
+import sys
+import re
+from copy import copy
 
 import logging
+import warnings
+import enlighten
 
-logging.basicConfig(level=logging.CRITICAL)
+logging.basicConfig(level=logging.INFO)
+
+warnings.filterwarnings("ignore")
 
 import numpy as np
 import argparse as ap
 
-from beatbox.raster import Raster
+from beatbox.raster import Raster, binary_reclassify
 from beatbox.moving_windows import filter
 
-import enlighten
+warnings.filterwarnings("default")
 
 # define handlers for argparse for any arguments passed at runtime
 example_text = str(
@@ -76,7 +82,7 @@ parser.add_argument(
 parser.add_argument(
     '-s',
     '--shape',
-    help='Specifies the skew or shape parameters for your moving window. Can be \'square\', \'circle\', or \'gaussian\''
+    help='Specifies the shape parameters for your moving window. Currently \'square\', \'circle\', or \'gaussian\' are supported'
 )
 
 parser.add_argument(
@@ -127,6 +133,7 @@ else:
 # non-generic ndimage filters available for
 # specifying these in advance can really
 # speed-up our calculations
+
 _NUMPY_STR_TO_FUNCTIONS = {
     'sum' : np.sum,
     'mean': np.mean,
@@ -135,7 +142,7 @@ _NUMPY_STR_TO_FUNCTIONS = {
     'stdev' : np.std
 }
 
-def get_numpy_function(user_fun_str=None):
+def _to_numpy_function(user_fun_str=None):
     """
     Parse our NUMPY_STR dictionary using regular expressions
     for our user-specified function string.
@@ -157,7 +164,7 @@ if __name__ == "__main__":
     _WINDOW_DIMS = []   # dimensions for moving windows calculations
     _MATCH_ARRAYS = {}  # used for reclass operations
     _TARGET_RECLASS_VALUE = [1] # if we reclass a raster, what should we reclass to?
-    _OUTFILE_NAME = "output" # output filename prefix
+    _OUTFILE_NAME = None # output filename prefix
     if len(sys.argv) == 1 :
         parser.print_help()
         sys.exit(0)
@@ -167,7 +174,7 @@ if __name__ == "__main__":
     if args['target_value']:
         _TARGET_RECLASS_VALUE = list(map(int, args['target_value'].split(',')))
     # -f/--fun
-    _FUNCTION = get_numpy_function(args['fun'])
+    _FUNCTION = _to_numpy_function(args['fun'])
     # figure out a good target datatype to use
     if args['dtype']:
         _TARGET_DTYPE = args['dtype']
@@ -184,7 +191,7 @@ if __name__ == "__main__":
             else:
                 _FUNCTION=globals()[args['fun']]()
         except KeyError as e:
-            raise KeyError("user specified function can't be mapped to numpy ",
+            raise KeyError("user specified function can't be mapped to numpy "
                            "or anything else : %s", e)
     # -w/--window-size
     if args['window_sizes']:
@@ -192,12 +199,15 @@ if __name__ == "__main__":
     # -c/--reclass
     if args['reclass']:
         _classes = args['reclass'].split(";")
-        for c in classes:
+        for c in _classes:
             c = c.split("=")
             _MATCH_ARRAYS[c[0]] = list(map(int, c[1].split(",")))
     # -o/--outfile
     if args['outfile']:
         _OUTFILE_NAME = args['outfile']
+    else:
+        _OUTFILE_NAME = _INPUT_RASTER.split('.')[0]
+        _OUTFILE_NAME = _OUTFILE_NAME + "_mw"
     # sanity-check runtime input
     if not _WINDOW_DIMS:
         raise ValueError("moving window dimensions need to be specified using"
@@ -208,7 +218,7 @@ if __name__ == "__main__":
     # Process our raster file stepwise, per window-size
     r = Raster(_INPUT_RASTER)
     # Progress reporting for raster sequences
-    if not logger.disabled:
+    if not logger.disabled and len(_WINDOW_DIMS) > 1:
         manager = enlighten.get_manager()
         progress = manager.counter(
             total=len(_MATCH_ARRAYS),
@@ -221,13 +231,14 @@ if __name__ == "__main__":
             + len(_MATCH_ARRAYS) + " windows"
         )
         for m in _MATCH_ARRAYS:
-            focal = r
+            focal = copy(r)
             if _MATCH_ARRAYS[m] is not None:
                 logger.DEBUG("reclassifying input raster using match array: %s", m)
                 focal.array= binary_reclassify(
-                    raster=focal,
+                    array=focal.array,
                     match=_MATCH_ARRAYS[m]
                 )
+
             for window in _WINDOW_DIMS:
                 filename=str(_OUTFILE_NAME+"_"+str(window)+"x"+str(window))
                 logger.DEBUG("applying moving_windows.filter to reclassed "
@@ -236,18 +247,18 @@ if __name__ == "__main__":
                     r = focal,
                     function = _FUNCTION,
                     size = window,
-                    dest_file = filename,
+                    filename = filename,
                     dtype=_TARGET_DTYPE)
-                if not logger.disabled : progress.update()
-
+                if not logger.disabled and len(_WINDOW_DIMS) > 1: progress.update()
     # otherwise just do our ndimage filtering
     else:
         for window in _WINDOW_DIMS:
             filename = str(_OUTFILE_NAME+"_"+str(window)+"x"+str(window))
-            test = filter(
+            filter(
                 r = r,
                 function = _FUNCTION,
                 size = window,
-                dest_filename = filename,
+                filename = filename,
                 dtype=_TARGET_DTYPE)
             if not logger.disabled : progress.update()
+

@@ -1,5 +1,4 @@
-
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 __author__ = "Kyle Taylor"
 __copyright__ = "Copyright 2018, Playa Lakes Joint Venture"

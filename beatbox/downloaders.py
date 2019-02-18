@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 __author__ = "Kyle Taylor"
 __copyright__ = "Copyright 2017, Playa Lakes Joint Venture"
@@ -9,6 +9,8 @@ __maintainer__ = "Kyle Taylor"
 __email__ = "kyle.taylor@pljv.org"
 __status__ = "Testing"
 
+import warnings
+warnings.filterwarnings("ignore")
 
 import os
 import re
