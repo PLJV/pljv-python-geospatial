@@ -39,18 +39,16 @@ logger = logging.getLogger(__name__)
 
 
 class Vector(object):
-    def __init__(self, filename=None, json=None):
-        """Handles file input/output operations for shapefiles \
-        using fiona and shapely built-ins and performs select \
-        spatial modifications on vector datasets
+    def __init__(self, *args, **kwargs):
+        """Handles file input/output operations for shapefiles using fiona and shapely \
+           built-ins and performs select spatial modifications on vector datasets
 
         Keyword arguments:
-        filename= the full path filename to a vector
-        dataset (typically a .shp file)
+        filename= the full path filename to a vector dataset (typically a .shp file).
         json=jsonified text
         Positional arguments:
-        1st= if no filname keyword argument was used,
-        attempt to read the first positional argument
+        1st= if no filname keyword argument was used, attempt to read the first positional\
+             argument
         """
         self._geometries = []
         self._attributes = {}
@@ -58,24 +56,31 @@ class Vector(object):
         self._schema = []
         self._crs = []
         self._crs_wkt = []
-        # args[0] / filename= / json=
-        if filename is None and json is None:
-            pass  # allow an empty specification
-        elif is_valid_file(filename):
-            self.filename = filename
+        # argument handlers
+        if len(args) == 1 and type(args[0] == dict):
+            kwargs = args[0]
+        kwargs['input'] = kwargs.get(
+            'input', 
+            args[0] if len(args) >= 1 else None)
+        # specification for class methods
+        if kwargs['input'] is None:
+            # allow an empty specification
+            pass
+        elif is_existing_file(kwargs['input']):
+            logger.debug("Accepting user-input as file and attempting read: %s",e)
+            self.filename = kwargs['input']
             self.read(filename=self.filename)
-        elif is_json(filename):
-            self.read(filename=filename)
-        elif is_json(json):
-            self.read(json=json)
-        # first argument is a GeoPandas object?
-        elif isinstance(filename, gp):
-            self.read(json=filename.to_json())
+        elif is_json(kwargs['input']):
+            self.read(json=kwargs['input'])
+        elif isinstance(kwargs['input'], gp):
+            self.read(json=kwargs['input'].to_json())
+        else:
+            logger.debug("Unhandled input provided to Vector()")
             
 
     def __copy__(self):
-        """ simple copy method that creates a new instance of a vector class and assigns \
-        default attributes from the parent instance
+        """ Simple copy method that creates a new instance of a vector class and assigns \
+            default attributes from the parent instance
         """
         _vector_geom = Vector()
         _vector_geom._geometries = self._geometries
@@ -234,7 +239,7 @@ class Vector(object):
         :return: None
         """
         # args[0] / -filename
-        if is_valid_file(filename):
+        if is_existing_file(filename):
             json = None
             self.filename = filename
         # if this is a json string, parse out our geometry and attribute
@@ -417,7 +422,7 @@ def rebuild_crs(*args):
         # our default action is to just assume local operation
         return _local_rebuild_crs(*args)
 
-def is_valid_file(string=None):
+def is_existing_file(string=None):
     try:
         if os.path.exists(string):
             return True

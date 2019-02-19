@@ -47,6 +47,10 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
+# Unit test intermediates
+*x*.tif
+*.aux.xml
+
 # Translations
 *.mo
 *.pot

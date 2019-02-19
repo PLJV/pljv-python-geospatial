@@ -20,6 +20,11 @@ from scipy import ndimage
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+_DEFAULT_WRITE_ACTION = False
+_DEFAULT_OVERWRITE_ACTION = False
+_DEFAULT_DTYPE = np.float
+_DEFAULT_FOOTPRINT_DTYPE = np.uint8 # this is typically boolean, formatted as integers
+
 def gen_circular_array(nPixels=None, dtype=np.bool):
     """ make a 2-d array for buffering. It represents a circle of
     radius buffsize pixels, with 1 inside the circle, and zero outside.
@@ -36,13 +41,13 @@ def _dict_to_mwindow_filename(key=None, window_size=None):
     """ quick kludging to generate a filename from key + window size """
     return str(key)+"_"+str(window_size)+"x"+str(window_size)
 
-def filter(*args, **kwargs):
+def ndimage_filter(*args, **kwargs):
     """ wrapper for ndimage filters that can comprehend a GeoRaster,
     apply a common rcular buffer, and optionally writes a numpy array to
     disk following user specifications
     """
     # populate our ndimage filter options from user-provided arguments,
-    # allowing for default options when available
+    # allowing for default options where available
     if len(args) == 1 and type(args[0] == dict):
         kwargs = args[0]
     kwargs['image'] = kwargs.get(
@@ -53,25 +58,25 @@ def filter(*args, **kwargs):
         args[1] if len(args) >= 2 else None)
     kwargs['write'] = kwargs.get(
         'write', 
-        args[2] if len(args) >= 3 else True)
+        args[2] if len(args) >= 3 else _DEFAULT_WRITE_ACTION)
     kwargs['footprint'] = kwargs.get(
         'footprint', 
         args[3] if len(args) >= 4 else None)
     kwargs['overwrite'] = kwargs.get(
         'overwrite', 
-        args[4] if len(args) >= 5 else True)
+        args[4] if len(args) >= 5 else _DEFAULT_OVERWRITE_ACTION)
     kwargs['function'] = kwargs.get(
         'function', 
         args[5] if len(args) >= 6 else None)
     kwargs['size'] = kwargs.get(
         'size', 
         args[6] if len(args) >= 7 else None)
-    kwargs['i_dtype'] = kwargs.get(
+    kwargs['intermediate_dtype'] = kwargs.get(
         'i_dtype', 
-        args[7] if len(args) >= 8 else np.float32) 
+        args[7] if len(args) >= 8 else _DEFAULT_DTYPE) 
     kwargs['dtype'] = kwargs.get(
         'dtype', 
-        args[8] if len(args) >= 9 else np.float32)
+        args[8] if len(args) >= 9 else _DEFAULT_DTYPE)
 
     # figure out if we are writing to disk
 
@@ -96,19 +101,22 @@ def filter(*args, **kwargs):
             "disabling write calls and returning result to user.")
         kwargs['write'] = False
 
-    # format our image as a numpy array
+    # format our Raster object as a numpy array
     
     if kwargs['size']:
-        kwargs['footprint'] = gen_circular_array(kwargs['size'], dtype=np.uint8)
+        kwargs['footprint'] = gen_circular_array(kwargs['size'], dtype=_DEFAULT_FOOTPRINT_DTYPE)
     try:
+        # re-cast our user-provided, masked array with a zero fill-value
         kwargs['image'].array = np.ma.masked_array(
             kwargs['image'].array,
             fill_value=0,
-            dtype=kwargs['i_dtype'])
+            dtype=kwargs['intermediate_dtype'])
+        # and fill the numpy array with actual zeros before doing a moving windows analysis
         kwargs['image'] = np.ma.filled(
             kwargs['image'].array,
             fill_value=0)
     except AttributeError as e:
+        # otherwise, assume the user already supplied a properly formatted np.array
         pass
     
     logger.debug("Ndimage filter() run-time parameters : \n%s\n", str(kwargs))

@@ -26,7 +26,7 @@ import numpy as np
 import argparse as ap
 
 from beatbox.raster import Raster, binary_reclassify
-from beatbox.moving_windows import filter
+from beatbox.moving_windows import ndimage_filter
 
 warnings.filterwarnings("default")
 
@@ -168,33 +168,28 @@ if __name__ == "__main__":
     if len(sys.argv) == 1 :
         parser.print_help()
         sys.exit(0)
-    # -r/--raster
-    # full-path to a raster file to apply our window over
-    _INPUT_RASTER = args.get('raster', None)
     # -t/--target-values
     # if we reclass a raster, what should we reclass to?
     logger.debug(str(args))
-    _TARGET_RECLASS_VALUE = list(map(int, str(args.get('target_value')).split(',')))
+    args['target_value'] = list(map(int, str(args.get('target_value')).split(',')))
     # -f/--fun
     # function to apply over each window
-    _MW_FUNCTION = _to_numpy_function(args.get('fun', None))
-    # figure out a good target datatype to use
-    _TARGET_DTYPE = args.get('dtype')
+    args['fun'] = _to_numpy_function(args.get('fun', None))
     # if this doesn't map as a numpy function, maybe it's something else
     # lurking in the global scope we can find?
-    if not _MW_FUNCTION:
+    if not args['fun']:
         try:
             if re.search(string=args['fun'],pattern="\."):
                 function = args['fun'].split(".")
                 # assume user wants an explicit function : e.g., "numpy.min"
-                _MW_FUNCTION=getattr(globals()[function[0]],function[1])
+                args['fun']=getattr(globals()[function[0]],function[1])
             else:
-                _MW_FUNCTION=globals()[args['fun']]()
+                args['fun']=globals()[args['fun']]()
         except KeyError as e:
             raise KeyError("user specified function can't be mapped to numpy "
                            "or anything else : %s", e)
     # -w/--window-size
-    _WINDOW_DIMS = list(map(int, args.get('window_sizes', None).split(',')))
+    args['window_sizes'] = list(map(int, args.get('window_sizes', None).split(',')))
     # -c/--reclass
     if args['reclass']:
         _SRC_VALUES = args['reclass'].split(";")
@@ -204,21 +199,22 @@ if __name__ == "__main__":
     # -o/--outfile
     # output filename prefix
     if args['outfile']:
-        _OUTFILE_NAME = args.get('outfile') + "_mw"
+        args['outfile'] = args['outfile'].replace('.tif','')
+        args['outfile'] = args.get('outfile') + "_mw"
     else:
-        _OUTFILE_NAME = _INPUT_RASTER.split('.')[0] + "_mw"
-    logger.debug("Using outfile name (root) : %s", _OUTFILE_NAME)
+        args['outfile'] = args['raster'].replace('.tif','') + "_mw"
+    logger.debug("Using outfile name (root) : %s", args['outfile'])
     # sanity-check runtime input
-    if not _WINDOW_DIMS:
+    if not args['window_sizes']:
         raise ValueError("Moving window dimensions need to be specified using"
         "the -w argument at runtime. see -h for usage.")
-    elif not _INPUT_RASTER:
+    elif not args['raster']:
         raise ValueError("An input raster should be specified"
         "with the -r argument at runtime. see -h for usage.")
     # Process our raster file stepwise, per window-size
-    r = Raster(_INPUT_RASTER, dtype=_TARGET_DTYPE)
+    r = Raster(args['raster'], dtype=args['dtype'])
     # Progress reporting for raster sequences
-    SHOW_PROGRESS = not logger.disabled and len(_WINDOW_DIMS) > 1
+    SHOW_PROGRESS = not logger.disabled and len(args['window_sizes']) > 1
     if SHOW_PROGRESS:
         manager = enlighten.get_manager()
         progress = manager.counter(
@@ -239,30 +235,30 @@ if __name__ == "__main__":
                     array=focal.array,
                     match=_MATCH_ARRAYS[m]
                 )
-            for w in _WINDOW_DIMS:
-                f = str(_OUTFILE_NAME+"_"+str(w)+"x"+str(w)+".tif")
+            for w in args['window_sizes']:
+                f = str(args['outfile']+"_"+str(w)+"x"+str(w))
                 logger.debug("applying moving_windows.filter to reclassed "
                     "array for window size: %s", w)
-                filter({
+                ndimage_filter({
                     'image' : focal,
-                    'function':_MW_FUNCTION,
+                    'function':args['fun'],
                     'size': w,
                     'filename': f,
-                    'dtype': _TARGET_DTYPE })
+                    'dtype': args['dtype'] })
                 if SHOW_PROGRESS : progress.update()
     # otherwise just do our ndimage filtering
     else:
-        for w in _WINDOW_DIMS:
-            f = str(_OUTFILE_NAME+"_"+str(w)+"x"+str(w)+".tif")
+        for w in args['window_sizes']:
+            f = str(args['outfile']+"_"+str(w)+"x"+str(w))
             logger.debug("applying moving_windows.filter to image "
                 "array for window size: %s", w)
             output = copy(r)
             output.filename = f
-            output.array = filter({
+            output.array = ndimage_filter({
                 'image' : r,
-                'function' : _MW_FUNCTION,
+                'function' : args['fun'],
                 'size' : w,
-                'dtype' : _TARGET_DTYPE })
+                'dtype' : args['dtype'] })
             output.write()
             if SHOW_PROGRESS : progress.update()
 

@@ -42,7 +42,7 @@ import psutil
 #                    "to load but without the EE functionality.")
 
 _DEFAULT_NA_VALUE = 65535
-_DEFAULT_PRECISION = np.uint16
+_DEFAULT_DTYPE = np.uint16
 
 class Raster(object):
     """ Raster class is a wrapper for generating GeoRasters,
@@ -56,17 +56,16 @@ class Raster(object):
 
     def __init__(self, filename=None, array=None, dtype=None,
                  disc_caching=None):
-        # Hidden properties manipulated by setters/getters
         self._backend = "local"
         self._array = None
         self._filename = None
-        self._using_disc_caching = None  # Use mmcache?
-        # Public properties (maintained for GeoRasters compatibility)
-        self.ndv = _DEFAULT_NA_VALUE # no data value
-        self.x_cell_size = None  # cell size of x (meters/degrees)
-        self.y_cell_size = None  # cell size of y (meters/degrees)
-        self.geot = None         # geographic transformation
-        self.projection = None   # geographic projection
+        self._using_disc_caching = None  # Use mmcache? 
+
+        self.ndv = _DEFAULT_NA_VALUE     # no data value
+        self.x_cell_size = None          # cell size of x (meters/degrees)
+        self.y_cell_size = None          # cell size of y (meters/degrees)
+        self.geot = None                 # geographic transformation
+        self.projection = None           # geographic projection
         self.dtype = None
         # args[0]/filename=
         self.filename = filename
@@ -216,6 +215,7 @@ class Raster(object):
                 ndv=self.ndv,
                 xsize=self.x_cell_size,
                 ysize=self.y_cell_size)
+            logger.debug("create_geotiff() : write success")
         except Exception as e:
             logger.debug("general failure attempting to write raster to disk : %s", e)
             raise(e)
