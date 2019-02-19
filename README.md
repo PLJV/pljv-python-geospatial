@@ -6,9 +6,7 @@ install it's standard dependencies with anaconda or pip and can produce raster
 and vector datasets that can be integrated into common spatial 
 processing frameworks and distributed computing workflows. PLJV uses beatbox 
 downstream for cloud computing tasks. You will see it used as a standard 
-dependency on a number of our other projects. Beatbox supports Python 2 and 3 
-out-of-the-box, but you will need to use Python 2 for Earth Engine 
-functionality. 
+dependency on a number of our other projects.
 
 *This is still a young project. If you are not a collaborator and just happened 
 onto this repository while looking for ways to crunch geospatial data with 

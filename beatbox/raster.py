@@ -67,7 +67,7 @@ class Raster(object):
         self.y_cell_size = None  # cell size of y (meters/degrees)
         self.geot = None         # geographic transformation
         self.projection = None   # geographic projection
-        self.dtype = _DEFAULT_PRECISION
+        self.dtype = None
         # args[0]/filename=
         self.filename = filename
         # args[1]/array=
@@ -113,11 +113,19 @@ class Raster(object):
         """
         Assign a numpy masked array to our Raster object
         """
-        self._array = np.ma.masked_array(
-            args[0],
-            mask=self._array == self.ndv,
-            fill_value=self.ndv
-        )
+        if args[0] is None:
+            self._array = None
+        else:
+            try:
+                self.dtype = args[0].dtype
+            except AttributeError as e:
+                logger.debug("array= expects a (masked) numpy array as input : %s -- skipping "
+                "setting dtype and just loading the array", e)
+            self._array = np.ma.masked_array(
+                args[0],
+                mask=self._array == self.ndv,
+                fill_value=self.ndv,
+                dtype=self.dtype)
 
     @property
     def filename(self):
@@ -158,10 +166,6 @@ class Raster(object):
         # re-cast our datatype as a numpy type, if needed
         if type(self.dtype) == str:
             self.dtype = _to_numpy_type(self.dtype)
-        # set our nodata value and do a sanity check, because
-        # sometimes the raster NDV and type will disagree
-        if self.ndv is None:
-            self.ndv = _DEFAULT_NA_VALUE
         self.ndv = _no_data_value_sanity_check(self)
         # low-level call to gdal with explicit type specification
         # that will store in memory or as a disc cache, depending
@@ -188,7 +192,7 @@ class Raster(object):
             fill_value=self.ndv
         )
 
-    def write(self, filename=None, datatype=gdal.GDT_UInt16,
+    def write(self, filename=None, datatype=None,
               driver=gdal.GetDriverByName('GTiff')):
         """ Wrapper for GeoRaster's create_geotiff that writes a numpy array to
         disk.
@@ -197,19 +201,24 @@ class Raster(object):
         :param driver:
         :return:
         """
+        if datatype is None:
+            datatype = gdal_array.NumericTypeCodeToGDALTypeCode(self.dtype)
         if not filename:
-            filename = self.filename
-        return create_geotiff(
-            name=filename,
-            Array=self.array,
-            geot=self.geot,
-            projection=self.projection,
-            datatype=datatype,
-            driver=driver,
-            ndv=self.ndv,
-            xsize=self.x_cell_size,
-            ysize=self.y_cell_size
-        )
+            filename = self.filename.replace(".tif", "")
+        try:
+            create_geotiff(
+                name=filename,
+                Array=self.array,
+                geot=self.geot,
+                projection=self.projection,
+                datatype=datatype,
+                driver=driver,
+                ndv=self.ndv,
+                xsize=self.x_cell_size,
+                ysize=self.y_cell_size)
+        except Exception as e:
+            logger.debug("general failure attempting to write raster to disk : %s", e)
+            raise(e)
 
     def to_numpy_array(self):
         """ Returns numpy array values for our Raster object.
@@ -227,7 +236,7 @@ class Raster(object):
             self.geot,
             nodata_value=self.ndv,
             projection=self.projection,
-            datatype=self.array.dtype
+            datatype=self.dtype
         )
 
     def to_ee_image(self):
@@ -447,8 +456,6 @@ def _local_merge(rasters=None):
     if rasters is None:
         raise IndexError("invalid raster= argument specified")
     return merge(rasters)
-
-
 
 def _local_split(raster=None, n=None):
     """ Wrapper for np._array_split. Splits an input array into n (mostly)

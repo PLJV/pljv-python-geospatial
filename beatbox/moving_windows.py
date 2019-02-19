@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 __author__ = "Kyle Taylor"
 __copyright__ = "Copyright 2017, Playa Lakes Joint Venture"
@@ -20,7 +20,7 @@ from scipy import ndimage
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def gen_circular_array(nPixels=None, dtype=np.uint8):
+def gen_circular_array(nPixels=None, dtype=np.bool):
     """ make a 2-d array for buffering. It represents a circle of
     radius buffsize pixels, with 1 inside the circle, and zero outside.
     """
@@ -36,80 +36,108 @@ def _dict_to_mwindow_filename(key=None, window_size=None):
     """ quick kludging to generate a filename from key + window size """
     return str(key)+"_"+str(window_size)+"x"+str(window_size)
 
-def filter(r=None, filename=None, write=True, footprint=None,
-           overwrite=True, function=None, size=None, i_dtype=np.float32, 
-           dtype=np.float16):
+def filter(*args, **kwargs):
     """ wrapper for ndimage filters that can comprehend a GeoRaster,
     apply a common rcular buffer, and optionally writes a numpy array to
     disk following user specifications
     """
+    # populate our ndimage filter options from user-provided arguments,
+    # allowing for default options when available
+    if len(args) == 1 and type(args[0] == dict):
+        kwargs = args[0]
+    kwargs['image'] = kwargs.get(
+        'image', 
+        args[0] if len(args) >= 1 else None)
+    kwargs['filename'] = kwargs.get(
+        'filename', 
+        args[1] if len(args) >= 2 else None)
+    kwargs['write'] = kwargs.get(
+        'write', 
+        args[2] if len(args) >= 3 else True)
+    kwargs['footprint'] = kwargs.get(
+        'footprint', 
+        args[3] if len(args) >= 4 else None)
+    kwargs['overwrite'] = kwargs.get(
+        'overwrite', 
+        args[4] if len(args) >= 5 else True)
+    kwargs['function'] = kwargs.get(
+        'function', 
+        args[5] if len(args) >= 6 else None)
+    kwargs['size'] = kwargs.get(
+        'size', 
+        args[6] if len(args) >= 7 else None)
+    kwargs['i_dtype'] = kwargs.get(
+        'i_dtype', 
+        args[7] if len(args) >= 8 else np.float32) 
+    kwargs['dtype'] = kwargs.get(
+        'dtype', 
+        args[8] if len(args) >= 9 else np.float32)
+
+    # figure out if we are writing to disk
+
     try:
-        _WRITE_FILE = ((not os.path.isfile(filename)) | overwrite) & write \
-            & (filename is not None)
+        if kwargs['filename'] is None:
+            kwargs['write'] = False
+        else:
+            kwargs['write'] = not os.path.isfile(kwargs['filename']) | kwargs['overwrite'] & kwargs['write']
+            logger.debug("Will attempt to write raster file to dir: %s as %s", os.getcwd(), kwargs['filename'])
     except TypeError as e:
-        logger.warning("encountered an issue specifying a write file -- "
-                       "filter will return to user : %s", e)
-        _WRITE_FILE = False
+        logger.debug("Encountered an issue specifying a write file -- "
+            "filter will return result to user : %s", e)
+        kwargs['write'] = False
+    
+    # grab our x/y cell sizes, if they are available
+    
     try:
-        _FOOTPRINT = footprint if footprint is not None else \
-            gen_circular_array(nPixels=size//2, dtype=i_dtype)
-    except TypeError as e:
-        raise TypeError("Unknown size= or footprint= arguments passed to"
-        "filter() : %s", e)
-    # apply ndimage filter to user specifications
+        kwargs['x_cell_size'] = kwargs['image'].x_cell_size
+        kwargs['y_cell_size'] = kwargs['image'].y_cell_size
+    except AttributeError:
+        logger.debug("We were passed a numpy array without any cell sizes... "
+            "disabling write calls and returning result to user.")
+        kwargs['write'] = False
+
+    # format our image as a numpy array
+    
+    if kwargs['size']:
+        kwargs['footprint'] = gen_circular_array(kwargs['size'], dtype=np.uint8)
     try:
-        image = np.array(r.array, dtype=i_dtype)
+        kwargs['image'].array = np.ma.masked_array(
+            kwargs['image'].array,
+            fill_value=0,
+            dtype=kwargs['i_dtype'])
+        kwargs['image'] = np.ma.filled(
+            kwargs['image'].array,
+            fill_value=0)
     except AttributeError as e:
-        image = np.array(r, dtype=i_dtype)
-    # these ndimage filters can be used for the most common functions
+        pass
+    
+    logger.debug("Ndimage filter() run-time parameters : \n%s\n", str(kwargs))
+    
+    # apply ndimage filter to user specifications
+    # these can be used for the most common functions
     # we may encounter for moving windows analyses
-    if function == np.median or function == np.mean:
-        image = ndimage.median_filter(
-            input=image,
-            footprint=_FOOTPRINT
-        )
-    elif function == sum or function == np.sum:
-        image = ndimage.median_filter(
-            input = image,
-            footprint = _FOOTPRINT
-        ) * _FOOTPRINT.sum()
-    elif function == np.max:
-        image = ndimage.maximum_filter(
-            input = image,
-            footprint = _FOOTPRINT
-        )
-    elif function == np.min:
-        image = ndimage.minimum_filter(
-            input = image,
-            footprint = _FOOTPRINT
-        )
-    # but, if all else fails, use the (slower) ndimage.generic_filter
-    else:
-        logger.warning("couldn't find a suitable pre-canned ndimage function "
-                       "for your filter operation. Falling back on generic_filter, "
-                       "which may be slow")
-        try:
-            image = ndimage.generic_filter(
-                input=np.array(image, dtype=i_dtype),
-                function=function,
-                footprint=_FOOTPRINT
-            )
-        except Exception as e:
-                raise RuntimeError("Failed to execute generic_filter using user-specified function. See: %s", e)
+
+    kwargs['image'] = ndimage.generic_filter(
+        input=kwargs['image'],
+        function=kwargs['function'],
+        footprint=kwargs['footprint'])
+
+    logger.debug("Filter result : \n\n%s\n", kwargs['image'])
+    logger.debug("Cumulative sum : %s", kwargs['image'].cumsum())
+    
     # either save to disk or return to user
-    if _WRITE_FILE:
-        outfile = Raster()
-        outfile.dtype = dtype
-        outfile.array = np.array(image, dtype=dtype)
-        outfile.filename = str(filename)
+    if kwargs['write']:
+        outfile = Raster(array = np.array(kwargs['image']))
+        outfile.x_cell_size = kwargs['x_cell_size']
+        outfile.y_cell_size = kwargs['y_cell_size']
+        outfile.filename = kwargs['filename']
         try:
-            outfile.write(filename=str(filename))
+            outfile.write()
         except AttributeError as e:
-            filename = filename.replace(".tif", "") # gdal will append for us
-            outfile.write(filename=str(filename))
+            outfile.write(filename=kwargs['filename'])
         except Exception as e:
-            logger.warning("%s doesn't appear to be a Raster object; "
+            logger.debug("%s doesn't appear to be a Raster object; "
                            "returning result to user", e)
-            return image
+            return kwargs['image']
     else:
-        return image
+        return kwargs['image']
