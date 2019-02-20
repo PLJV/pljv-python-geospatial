@@ -18,7 +18,7 @@ import json
 
 import pyproj
 
-from shapely.geometry import *
+from shapely.geometry import shape
 
 from .do import Local, EE, Do, _build_kwargs_from_args
 

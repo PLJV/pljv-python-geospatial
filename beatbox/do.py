@@ -90,9 +90,10 @@ class Do(Backend):
         try:
             self._what = args[0]['what']
             self._with = args[0]['with']
-        except KeyError or IndexError as e:
-            raise KeyError("run= accepts a dict as a single positional argument specifying "
-                           "'what' and 'with' keys")
+        except KeyError as e:
+            logger.exception("run= accepts a dict as a single positional argument specifying "
+                             "'what' and 'with' keys : %s", e)
+            raise KeyError()
         # determine what backend to use (or if the user specified
         # backend is inappropriate for the given data)
         self._unpack_with_arguments()
