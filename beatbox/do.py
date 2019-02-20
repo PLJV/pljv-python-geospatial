@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 __author__ = "Kyle Taylor"
 __copyright__ = "Copyright 2017, Playa Lakes Joint Venture"
@@ -11,7 +11,7 @@ __status__ = "Testing"
 
 import logging
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.debug)
 logger = logging.getLogger(__name__)
 
 
@@ -97,3 +97,32 @@ class Do(Backend):
         # backend is inappropriate for the given data)
         self._unpack_with_arguments()
         self._guess_backend()
+
+
+def _build_kwargs_from_args(args=None, defaults=[], keys=[]):
+    """ Build a standard dictionary from user-supplied *args or **kwargs
+    function input """
+    logger.debug("Input:%s",str(args))
+    logger.debug("Type:%s",str(type(args)))
+    if args is None : return None
+    # standard interface is often a tuple that we need to unpack
+    # as a list or dict
+    if type(args) is tuple:
+        args = args[0] if type(args[0]) is dict else list(args)
+    kwargs = { }
+    if type(args) is list:
+        for i in range(len(keys)):
+            try:
+                if type(args[i]) is dict:
+                    kwargs[keys[i]] = list(args[i].values())[0]
+                else:
+                    kwargs[keys[i]] = args[i]
+            except IndexError:
+                kwargs[keys[i]] = defaults[i]
+    else:
+        for i in range(len(keys)) : kwargs[keys[i]] = defaults[i]
+        for key in kwargs.keys():
+            if key in args.keys():
+                kwargs[key] = args[key]
+    logger.debug("Result:%s",str(kwargs))
+    return kwargs

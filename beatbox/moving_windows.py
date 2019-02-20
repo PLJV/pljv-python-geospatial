@@ -14,7 +14,9 @@ import re
 import numpy as np
 import logging
 
-from .raster import Raster, _build_kwargs_from_args
+from .raster import Raster
+from .do import _build_kwargs_from_args
+
 from scipy import ndimage
 
 logging.basicConfig(level=logging.INFO)

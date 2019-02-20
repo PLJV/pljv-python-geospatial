@@ -30,6 +30,8 @@ from osgeo import gdal_array
 # memory profiling
 import types
 import psutil
+# beatbox
+from .do import _build_kwargs_from_args
 # # Fickle beast handlers for Earth Engine
 # try:
 #     import ee
@@ -152,10 +154,9 @@ class Raster(object):
         KNOWN_ARGS = ['file', 'dtype']
         DEFAULTS = [self.filename, self.dtype]
         if len(args) > 0:
-            if type(args[0]) == dict:
-                kwargs = args[0]
-            else:
-                kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
+            kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
+        else:
+            kwargs = _build_kwargs_from_args(kwargs, defaults=DEFAULTS, keys=KNOWN_ARGS)
         # args[0]/file=
         kwargs['file'] = kwargs.get('file', None)
         if kwargs['file'] is None:
@@ -184,7 +185,7 @@ class Raster(object):
         if self._using_disc_caching is not None:
             # create a cache file
             self.array = np.memmap(
-                self._using_disc_caching, dtype=dtype, mode='w+',
+                self._using_disc_caching, dtype=self.dtype, mode='w+',
                 shape = (self.x_cell_size, self.y_cell_size))
             # load file contents into the cache
             self.array[:] = gdalnumeric.LoadFile(
@@ -226,9 +227,9 @@ class Raster(object):
                 ndv=self.ndv,
                 xsize=self.x_cell_size,
                 ysize=self.y_cell_size)
-            logger.debug("create_geotiff() : write success")
+            logger.debug("write() : write succeeded")
         except Exception as e:
-            logger.debug("general failure attempting to write raster to disk : %s", e)
+            logger.debug("write() : general failure attempting to write raster to disk : %s", e)
             raise(e)
 
     def to_numpy_array(self):
@@ -260,32 +261,6 @@ class Raster(object):
                        "still working through asset ingestion for earth engine.")
         return ee.array(self.array)
 
-def _build_kwargs_from_args(args=None, defaults=[], keys=[]):
-    logger.debug("Input:%s",str(args))
-    logger.debug("Type:%s",str(type(args)))
-    if args is None : return None
-    if type(args) is tuple:
-        if type(args[0]) is not dict:
-            args = list(args)
-        else:
-            args = args[0]
-    kwargs = { }
-    if type(args) is list:
-        for i in range(len(keys)):
-            try:
-                if type(args[i]) is dict:
-                    kwargs[keys[i]] = list(args[i].values())[0]
-                else:
-                    kwargs[keys[i]] = args[i]
-            except IndexError:
-                kwargs[keys[i]] = defaults[i]
-    else:
-        for i in range(len(keys)) : kwargs[keys[i]] = defaults[i]
-        for key in kwargs.keys():
-            if key in args.keys():
-                kwargs[key] = args[key]
-    logger.debug("Result:%s",str(kwargs))
-    return kwargs
 
 # short-hand string identifiers for numpy
 # types. Int, float, and byte will be the

@@ -19,7 +19,8 @@ import json
 import pyproj
 
 from shapely.geometry import *
-from .do import Local, EE, Do
+
+from .do import Local, EE, Do, _build_kwargs_from_args
 
 import logging
 
@@ -57,22 +58,25 @@ class Vector(object):
         self._crs = []
         self._crs_wkt = []
         # argument handlers
-        if len(args) == 1 and type(args[0] == dict):
-            kwargs = args[0]
-        kwargs['input'] = kwargs.get(
-            'input', 
-            args[0] if len(args) >= 1 else None)
+        KNOWN_ARGS = ['input']
+        DEFAULTS = [None]
+        if len(args) > 0:
+            kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
+        else:
+            kwargs = _build_kwargs_from_args(kwargs, defaults=DEFAULTS, keys=KNOWN_ARGS)
         # specification for class methods
         if kwargs['input'] is None:
             # allow an empty specification
             pass
         elif is_existing_file(kwargs['input']):
-            logger.debug("Accepting user-input as file and attempting read: %s",e)
+            logger.debug("Accepting user-input as file and attempting read: %s", kwargs['input'])
             self.filename = kwargs['input']
             self.read(filename=self.filename)
         elif is_json(kwargs['input']):
+            logger.debug("Accepting user-input as json and attempting read: %s", kwargs['input'])
             self.read(json=kwargs['input'])
         elif isinstance(kwargs['input'], gp):
+            logger.debug("Accepting user-input as geopandas and attempting read: %s", kwargs['input'])
             self.read(json=kwargs['input'].to_json())
         else:
             logger.debug("Unhandled input provided to Vector()")
