@@ -14,7 +14,7 @@ import re
 import numpy as np
 import logging
 
-from .raster import Raster
+from .raster import Raster, _build_kwargs_from_args
 from scipy import ndimage
 
 logging.basicConfig(level=logging.INFO)
@@ -46,42 +46,49 @@ def ndimage_filter(*args, **kwargs):
     apply a common rcular buffer, and optionally writes a numpy array to
     disk following user specifications
     """
-    # populate our ndimage filter options from user-provided arguments,
-    # allowing for default options where available
-    if len(args) == 1 and type(args[0] == dict):
-        kwargs = args[0]
-    kwargs['image'] = kwargs.get(
-        'image', 
-        args[0] if len(args) >= 1 else None)
-    kwargs['filename'] = kwargs.get(
-        'filename', 
-        args[1] if len(args) >= 2 else None)
-    kwargs['write'] = kwargs.get(
-        'write', 
-        args[2] if len(args) >= 3 else _DEFAULT_WRITE_ACTION)
-    kwargs['footprint'] = kwargs.get(
-        'footprint', 
-        args[3] if len(args) >= 4 else None)
-    kwargs['overwrite'] = kwargs.get(
-        'overwrite', 
-        args[4] if len(args) >= 5 else _DEFAULT_OVERWRITE_ACTION)
-    kwargs['function'] = kwargs.get(
-        'function', 
-        args[5] if len(args) >= 6 else None)
-    kwargs['size'] = kwargs.get(
-        'size', 
-        args[6] if len(args) >= 7 else None)
-    kwargs['intermediate_dtype'] = kwargs.get(
-        'i_dtype', 
-        args[7] if len(args) >= 8 else _DEFAULT_DTYPE) 
-    kwargs['dtype'] = kwargs.get(
-        'dtype', 
-        args[8] if len(args) >= 9 else _DEFAULT_DTYPE)
+    KNOWN_ARGS = ['image', 'filename', 'write', 'footprint', 'overwrite', 
+                  'function', 'size', 'intermediate_dtype', 'dtype']
+    DEFAULTS = [None, None, _DEFAULT_WRITE_ACTION, None, _DEFAULT_OVERWRITE_ACTION, None, None, _DEFAULT_DTYPE, _DEFAULT_DTYPE]
+    if len(args) > 0:
+        if type(args[0]) == dict:
+            kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
+        else:
+            kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
+    # if len(args) == 1 and type(args[0]) == dict:
+    #     kwargs = args[0]
+    # kwargs['image'] = kwargs.get(
+    #     'image', 
+    #     args[0] if len(args) >= 1 else None)
+    # kwargs['filename'] = kwargs.get(
+    #     'filename', 
+    #     args[1] if len(args) >= 2 else None)
+    # kwargs['write'] = kwargs.get(
+    #     'write', 
+    #     args[2] if len(args) >= 3 else _DEFAULT_WRITE_ACTION)
+    # kwargs['footprint'] = kwargs.get(
+    #     'footprint', 
+    #     args[3] if len(args) >= 4 else None)
+    # kwargs['overwrite'] = kwargs.get(
+    #     'overwrite', 
+    #     args[4] if len(args) >= 5 else _DEFAULT_OVERWRITE_ACTION)
+    # kwargs['function'] = kwargs.get(
+    #     'function', 
+    #     args[5] if len(args) >= 6 else None)
+    # kwargs['size'] = kwargs.get(
+    #     'size', 
+    #     args[6] if len(args) >= 7 else None)
+    # kwargs['intermediate_dtype'] = kwargs.get(
+    #     'i_dtype', 
+    #     args[7] if len(args) >= 8 else _DEFAULT_DTYPE) 
+    # kwargs['dtype'] = kwargs.get(
+    #     'dtype', 
+    #     args[8] if len(args) >= 9 else _DEFAULT_DTYPE)
 
     # figure out if we are writing to disk
 
     try:
-        if kwargs['filename'] is None:
+        if 'filename' not in kwargs.keys():
+            kwargs['filename'] = None
             kwargs['write'] = False
         else:
             kwargs['write'] = not os.path.isfile(kwargs['filename']) | kwargs['overwrite'] & kwargs['write']

@@ -43,6 +43,7 @@ import psutil
 
 _DEFAULT_NA_VALUE = 65535
 _DEFAULT_DTYPE = np.uint16
+_DEFAULT_RASTER_FORMAT = gdal.GetDriverByName('GTiff')
 
 class Raster(object):
     """ Raster class is a wrapper for generating GeoRasters,
@@ -142,26 +143,37 @@ class Raster(object):
     def backend(self, *args):
         self._backend = args[0]
 
-    def open(self, file=None, dtype=None):
+    def open(self, *args, **kwargs):
         """ Open a local file handle for reading and assignment
         :param file:
         :return: None
         """
+        # argument handlers
+        KNOWN_ARGS = ['file', 'dtype']
+        DEFAULTS = [self.filename, self.dtype]
+        if len(args) > 0:
+            if type(args[0]) == dict:
+                kwargs = args[0]
+            else:
+                kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
         # args[0]/file=
-        if file is None:
-            raise IndexError("invalid file= argument provided")
+        kwargs['file'] = kwargs.get('file', None)
+        if kwargs['file'] is None:
+            raise IndexError("invalid file= data")
+        # args[1]/dtype=
+        kwargs['dtype'] = kwargs.get('dtype', None)
         # grab raster meta information from GeoRasters
         try:
             self.ndv, self.x_cell_size, self.y_cell_size,\
-            self.geot, self.projection, self.dtype = get_geo_info(file)
+            self.geot, self.projection, _dtype = get_geo_info(kwargs['file'])
         except Exception:
             raise AttributeError("problem processing file input -- is this"
                 " a raster file?")
         # args[1]/dtype=
-        if dtype is not None:
-            # override our shadow'd value from GeoRasters if
-            # something was specified by the user
-            self.dtype = dtype
+        if kwargs['dtype'] is None:
+            # if the user didn't specify a type, just assume
+            # the 
+            self.dtype = _dtype
         # re-cast our datatype as a numpy type, if needed
         if type(self.dtype) == str:
             self.dtype = _to_numpy_type(self.dtype)
@@ -191,8 +203,7 @@ class Raster(object):
             fill_value=self.ndv
         )
 
-    def write(self, filename=None, datatype=None,
-              driver=gdal.GetDriverByName('GTiff')):
+    def write(self, filename=None, datatype=None, driver=_DEFAULT_RASTER_FORMAT):
         """ Wrapper for GeoRaster's create_geotiff that writes a numpy array to
         disk.
         :param filename:
@@ -249,6 +260,32 @@ class Raster(object):
                        "still working through asset ingestion for earth engine.")
         return ee.array(self.array)
 
+def _build_kwargs_from_args(args=None, defaults=[], keys=[]):
+    logger.debug("Input:%s",str(args))
+    logger.debug("Type:%s",str(type(args)))
+    if args is None : return None
+    if type(args) is tuple:
+        if type(args[0]) is not dict:
+            args = list(args)
+        else:
+            args = args[0]
+    kwargs = { }
+    if type(args) is list:
+        for i in range(len(keys)):
+            try:
+                if type(args[i]) is dict:
+                    kwargs[keys[i]] = list(args[i].values())[0]
+                else:
+                    kwargs[keys[i]] = args[i]
+            except IndexError:
+                kwargs[keys[i]] = defaults[i]
+    else:
+        for i in range(len(keys)) : kwargs[keys[i]] = defaults[i]
+        for key in kwargs.keys():
+            if key in args.keys():
+                kwargs[key] = args[key]
+    logger.debug("Result:%s",str(kwargs))
+    return kwargs
 
 # short-hand string identifiers for numpy
 # types. Int, float, and byte will be the
