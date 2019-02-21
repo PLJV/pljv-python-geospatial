@@ -65,8 +65,8 @@ class Raster(object):
         self._using_disc_caching = None  # Use mmcache? 
 
         self.ndv = _DEFAULT_NA_VALUE     # no data value
-        self.xsize = None                # number of x cells (meters/degrees)
-        self.ysize = None                # number of y cells(meters/degrees)
+        self._xsize = None                # number of x cells (meters/degrees)
+        self._ysize = None                # number of y cells(meters/degrees)
         self.geot = None                 # geographic transformation
         self.projection = None           # geographic projection
         self.dtype = None
@@ -96,8 +96,8 @@ class Raster(object):
         _raster._filename = copy(self._filename)
         _raster._using_disc_caching = copy(self._filename)
         _raster.ndv = self.ndv
-        _raster.xsize = self.xsize
-        _raster.ysize = self.ysize
+        _raster._xsize = self._xsize
+        _raster._ysize = self._ysize
         _raster.geot = self.geot
         _raster.projection = self.projection
         # if we are mem caching, generate a new tempfile
@@ -167,7 +167,7 @@ class Raster(object):
         kwargs['dtype'] = kwargs.get('dtype', None)
         # grab raster meta information from GeoRasters
         try:
-            self.ndv, self.xsize, self.ysize, self.geot, self.projection, _dtype = \
+            self.ndv, self._xsize, self._ysize, self.geot, self.projection, _dtype = \
                 get_geo_info(kwargs['file'])
         except Exception:
             raise AttributeError("problem processing file input -- is this"
@@ -188,7 +188,7 @@ class Raster(object):
             # create a cache file
             self.array = np.memmap(
                 self._using_disc_caching, dtype=self.dtype, mode='w+',
-                shape = (self.xsize, self.ysize))
+                shape = (self._xsize, self._ysize))
             # load file contents into the cache
             self.array[:] = gdalnumeric.LoadFile(
                 filename=self.filename,
@@ -227,8 +227,8 @@ class Raster(object):
                 datatype=datatype,
                 driver=driver,
                 ndv=self.ndv,
-                xsize=self.xsize,
-                ysize=self.ysize)
+                xsize=self._xsize,
+                ysize=self._ysize)
             logger.debug("write() : write succeeded")
         except Exception as e:
             logger.debug("write() : general failure attempting to write raster to disk : %s", e)

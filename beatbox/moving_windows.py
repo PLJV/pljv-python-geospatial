@@ -73,11 +73,9 @@ def ndimage_filter(*args, **kwargs):
             "filter will return result to user : %s", e)
         kwargs['write'] = False
     
-    # grab our x/y cell sizes, if they are available
-    
     try:
-        kwargs['xsize'] = kwargs['image'].xsize
-        kwargs['ysize'] = kwargs['image'].ysize
+        kwargs['xsize'] = kwargs['image']._xsize
+        kwargs['ysize'] = kwargs['image']._ysize
     except AttributeError:
         logger.debug("We were passed a numpy array without any cell sizes... "
             "disabling write calls and returning result to user.")
@@ -118,8 +116,8 @@ def ndimage_filter(*args, **kwargs):
     # either save to disk or return to user
     if kwargs['write']:
         outfile = Raster(array = np.array(kwargs['image']))
-        outfile.xsize = kwargs['xsize']
-        outfile.ysize = kwargs['ysize']
+        outfile._xsize = kwargs['xsize']
+        outfile._ysize = kwargs['ysize']
         outfile.filename = kwargs['filename']
         try:
             outfile.write()
