@@ -99,6 +99,34 @@ class Do(Backend):
         self._unpack_with_arguments()
         self._guess_backend()
 
+def _kwargs_builder(args=None, kwargs=None, defaults=[], keys=[]):
+    """ Build a standard dictionary from user-supplied *args or **kwargs
+    function input """
+    logger.debug("Input:%s : %s",str(args), str(kwargs))
+    logger.debug("Type:%s : %s",str(type(args)), str(type(kwargs)))
+    result = { }
+    # standard interface is often a tuple that we need to unpack
+    # as a list or dict
+    if args:
+        if type(args) is tuple:
+            args = args[0] if type(args[0]) is dict else list(args)
+        for i in range(len(keys)):
+            try:
+                if type(args[i]) is dict:
+                    result[keys[i]] = list(args[i].values())[0]
+                else:
+                    result[keys[i]] = args[i]
+            except IndexError:
+                result[keys[i]] = defaults[i]
+    if kwargs:
+        if type(kwargs) is tuple:
+            args = args[0] if type(args[0]) is dict else list(args)
+        for i in range(len(keys)) : result[keys[i]] = defaults[i]
+        for key in result.keys():
+            if key in args.keys():
+                result[key] = args[key]
+    logger.debug("Result:%s",str(result))
+    return result
 
 def _build_kwargs_from_args(args=None, defaults=[], keys=[]):
     """ Build a standard dictionary from user-supplied *args or **kwargs
