@@ -225,6 +225,7 @@ def _local_fuzzy_convex_hull(points=None, width=_DEFAULT_BUFFER_WIDTH):
                                  for ft in convex_hulls.geometry]]
     # return our convex hulls as a GeoDataFrame
     gdf = gp.GeoDataFrame({'geometry': convex_hulls})
+    gdf['clst_id'] = pd.Series(range(0,gdf.shape[0]))
     gdf.crs = points.crs
     # sanity check
     if len(gdf) < 1:
