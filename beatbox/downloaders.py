@@ -15,7 +15,7 @@ warnings.filterwarnings("ignore")
 import os
 import re
 import requests
-import urllib
+import urllib.request
 import logging
 import ntpath
 
@@ -23,8 +23,9 @@ from bs4 import BeautifulSoup as bs
 
 _CDL_BASE_URL = "http://www.nass.usda.gov/Research_and_Science/Cropland/" \
                 "Release/"
-_PROBABLE_PLAYAS_BASE_URL = "https://pljv.org/for-habitat-partners/maps" \
-                                 "-and-data/maps-of-probable-playas/"
+
+_PROBABLE_PLAYAS_BASE_URL = "http://www.pljv.org/PPv4_MapBook/"
+
 _FAA_DOF_URL = "https://www.faa.gov/air_traffic/flight_info/aeronav/digi" \
                "tal_products/dof/"
 
@@ -156,7 +157,7 @@ class HttpDownload(object):
         for i, f in enumerate(self.files):
             self.files[i] = self.files[i].split("/")[-1]
             if not os.path.exists(self.files[i]):
-                urllib.urlretrieve(f, self.files[i])
+                urllib.request.urlretrieve(self.url + f, self.files[i])
         # return our list of retrieved filenames to the user
         return self.files
 
