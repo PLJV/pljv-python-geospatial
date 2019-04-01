@@ -94,10 +94,7 @@ class Do(Backend):
             logger.exception("run= accepts a dict as a single positional argument specifying "
                              "'what' and 'with' keys : %s", e)
             raise KeyError()
-        # determine what backend to use (or if the user specified
-        # backend is inappropriate for the given data)
         self._unpack_with_arguments()
-        self._guess_backend()
 
 def _kwargs_builder(args=None, kwargs=None, defaults=[], keys=[]):
     """ Build a standard dictionary from user-supplied *args or **kwargs
