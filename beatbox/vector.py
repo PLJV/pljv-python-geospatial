@@ -32,13 +32,13 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # # Fickle beast handlers for Earth Engine
-# try:
-#     import ee
-#     ee.Initialize()
-# except Exception:
-#     logger.warning("Failed to load the Earth Engine API. "
-#                    "Check your installation. Will continue "
-#                    "to load but without the EE functionality.")
+try:
+    import ee
+    ee.Initialize()
+except Exception:
+    logger.warning("Failed to load the Earth Engine API. "
+                   "Check your installation. Will continue "
+                   "to load but without the EE functionality.")
 
 def rebuild_crs(*args):
     """
@@ -172,7 +172,7 @@ class EeAttributes(Attributes):
 
 class Vector(object):
     def __init__(self, *args, **kwargs):
-        """Handles file input/output operations for shapefiles using fiona and shapely \
+        """Builder class that handles file input/output operations for shapefiles using fiona and shapely 
            built-ins and performs select spatial modifications on vector datasets
 
         Keyword arguments:
@@ -201,8 +201,8 @@ class Vector(object):
         elif self._is_file(kwargs['input']):
             logger.debug("Accepting user-input as file and attempting read: %s", kwargs['input'])
             _features = self._builder(filename=kwargs['input'])
-        elif self._is_json(kwargs['input']):
-            logger.debug("Accepting user-input as json and attempting read: %s", kwargs['input'])
+        elif self._is_json_string(kwargs['input']):
+            logger.debug("Accepting user-input as json string and attempting read: %s", kwargs['input'])
             _features =  self._builder(json=kwargs['input'])
         elif isinstance(kwargs['input'], gp):
             logger.debug("Accepting user-input as geopandas and attempting read: %s", kwargs['input'])
@@ -231,13 +231,9 @@ class Vector(object):
         """ copy already is a deep copy """
         return self.__copy__()
 
-    def _is_json(self, string=None):
-        """
-        Use json.loads() to test whether this is a valid json string
-        """
+    def _is_string(self, string=None):
         try:
-            json.loads(string)
-            return True
+            return type(string) == str
         except Exception:
             return False
         return False
@@ -250,14 +246,28 @@ class Vector(object):
             return False
         return False
     
-    def _is_geojson(self, path=None):
+    def _is_geojson_file(self, path=None):
         return magic.from_file(path).find('ASCII') >= 0
+
+    def _is_json_string(self, string=None):
+        """
+        Use json.loads() to test whether this is a valid json string
+        """
+        try:
+            json.loads(string)
+            return True
+        except Exception:
+            return False
+        return False
 
     def _is_shapefile(self, path=None):
         return magic.from_file(path).find('ESRI Shapefile') >= 0
 
     def _is_geopackage(self, path=None):
         return magic.from_file(path).find('SQLite') >= 0
+
+    def _is_postgis(self, string=None):
+        raise NotImplementedError
 
     def _builder(self, *args, **kwargs):
         """
@@ -281,8 +291,8 @@ class Vector(object):
             kwargs = _build_kwargs_from_args(kwargs, defaults=DEFAULTS, keys=KNOWN_ARGS)
         # args[0] / -filename
         if self._is_file(kwargs['filename']):
-            if self._is_geojson(kwargs['filename']):
-                return GeoJson(kwargs['filename'])
+            if self._is_geojson_file(kwargs['filename']):
+                return GeoJson(filename=kwargs['filename'])
             elif self._is_shapefile(kwargs['filename']):
                 return Shapefile(kwargs['filename'])
             elif self._is_geopackage(kwargs['filename']):
@@ -291,8 +301,8 @@ class Vector(object):
                 return PostGis(kwargs['filename'], kwargs['dsn'])
             else:
                 raise FileNotFoundError("Couldn't process the provided filename as vector data")
-        if self._is_json(kwargs['json']):
-            return GeoJson(kwargs['json'])
+        if self._is_json_string(kwargs['json']):
+            return GeoJson(json_string=kwargs['json'])
         else:
             raise ValueError("Couldn't handle input data provided by user -- is this a valid JSON string or filename?")
 
@@ -389,22 +399,22 @@ class Fiona(object):
 
 class Shapefile(Fiona):
     def __init__(self, *args, **kwargs):
-        super(Shapefile).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
 
 class GeoJson(Fiona):
-    def __init__(self, *args):
+    def __init__(self, *args, **kwargs):
         """
-
         :param args:
         :return:
         """
-        self.filename = []
-        
-        self.geometries = self._to_geometries(args[0])
-        # args[0]/stringify=
-        if stringify is not None:
-            stringify = True
+        # argument handlers
+        KNOWN_ARGS = ['filename', 'json', 'stringify']
+        DEFAULTS = [None, None, True]
+        if args[0]:
+            kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
+        else:
+            kwargs = _build_kwargs_from_args(args)
         # build a target dictionary
         feature_collection = {
             "type": "FeatureCollection",
@@ -412,9 +422,18 @@ class GeoJson(Fiona):
             "crs": [],
             "properties": []
         }
+        if kwargs['filename']:
+            super().__init__(input=kwargs['filename'])
+        elif kwargs['json']:
+            super().__init__()
+            self.geometries = self._to_geometries(kwargs['json'])
+            logger.debug("dropping attribute table from input json object -- not implemented yet?")
+        else:
+            logger.debug('Unknown input passed to GeoJson constructor by user')
+            raise ValueError
         # iterate over features in our shapely geometries
         # and build-out our feature_collection
-        for feature in self.__geometries:
+        for feature in self.geometries:
             if isinstance(feature, dict):
                 feature_collection["features"].append(feature)
             else:
@@ -433,7 +452,7 @@ class GeoJson(Fiona):
                 self.attributes.loc[i].to_json()
             )
         # do we want this stringified?
-        if stringify:
+        if kwargs['stringify']:
             feature_collection = json.dumps(feature_collection)
 
     def _to_geometries(self, string=None):
@@ -442,8 +461,7 @@ class GeoJson(Fiona):
         :param string: GeoJSON string containing a feature collection to parse
         :return: None
         """
-        if self._is_json(string):
-            _json = json.loads(string)
+        _json = json.loads(string)
         try:
             _type = _json['type']
             _features = _json['features']
@@ -460,8 +478,11 @@ class GeoJson(Fiona):
             self.crs = {'crs': 'epsg:'+_DEFAULT_EPSG}
         # listcomp : iterate over our features and convert them
         # to shape geometries
-        self.__geometries = [shape(ft['geometry']) for ft in _features]
+        return [shape(ft['geometry']) for ft in _features]
 
+    def read(self):
+        """Read JSON data from a file using fiona"""
+        raise NotImplementedError
 
 class GeoPackage(Fiona):
     def __init__(self, *args, **kwargs):
