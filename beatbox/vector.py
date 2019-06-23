@@ -161,6 +161,7 @@ class Attributes(object):
     
     @attributes.setter
     def attributes(self, *args):
+        """Cast a shapely collection as a pandas dataframe"""
         try:
             self._attributes = pd.DataFrame([ dict(item['properties']) for item in list(args[0]) ])
         except AttributeError:
@@ -426,8 +427,9 @@ class GeoJson(Fiona):
             super().__init__(input=kwargs['filename'])
         elif kwargs['json']:
             super().__init__()
-            self.geometries = self._to_geometries(kwargs['json'])
-            logger.debug("dropping attribute table from input json object -- not implemented yet?")
+            self.geometries = Geometries(kwargs['json']).geometries
+            self.attributes = Attributes(self.geometries).attributes
+            logger.debug("warning: review attribute table from input json object")
         else:
             logger.debug('Unknown input passed to GeoJson constructor by user')
             raise ValueError
@@ -454,31 +456,6 @@ class GeoJson(Fiona):
         # do we want this stringified?
         if kwargs['stringify']:
             feature_collection = json.dumps(feature_collection)
-
-    def _to_geometries(self, string=None):
-        """
-        Accepts a json string and parses it into a shapely feature collection
-        :param string: GeoJSON string containing a feature collection to parse
-        :return: None
-        """
-        _json = json.loads(string)
-        try:
-            _type = _json['type']
-            _features = _json['features']
-        except KeyError:
-            raise KeyError("Unable to parse features from json. "
-                           "Is this not a GeoJSON string?")
-        try:
-            self.crs = _json['crs']
-        except KeyError:
-            # nobody uses CRS with GeoJSON, but it's default
-            # projection is typically EPSG:4326
-            logger.warning("no crs property defined for json input "
-                           "-- assuming EPSG:"+_DEFAULT_EPSG)
-            self.crs = {'crs': 'epsg:'+_DEFAULT_EPSG}
-        # listcomp : iterate over our features and convert them
-        # to shape geometries
-        return [shape(ft['geometry']) for ft in _features]
 
     def read(self):
         """Read JSON data from a file using fiona"""
