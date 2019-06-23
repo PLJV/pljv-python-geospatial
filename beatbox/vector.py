@@ -16,12 +16,13 @@ import geopandas as gp
 import pandas as pd
 import json
 import magic
+import psycopg2
 
 import pyproj
 
 from shapely.geometry import shape
 
-# from .do import Local, EE, Do, _build_kwargs_from_args
+from .do import Local, EE, Do, _build_kwargs_from_args
 
 import logging
 
@@ -286,6 +287,8 @@ class Vector(object):
                 return Shapefile(kwargs['filename'])
             elif self._is_geopackage(kwargs['filename']):
                 return GeoPackage(kwargs['filename'], kwargs['layer'], kwargs['driver'])
+            elif self._is_postgis(kwargs['filename']):
+                return PostGis(kwargs['filename'], kwargs['dsn'])
             else:
                 raise FileNotFoundError("Couldn't process the provided filename as vector data")
         if self._is_json(kwargs['json']):
@@ -383,9 +386,11 @@ class Fiona(object):
                 'properties': self.attributes.to_dict(),
             })
 
+
 class Shapefile(Fiona):
     def __init__(self, *args, **kwargs):
         super(Shapefile).__init__(*args, **kwargs)
+
 
 class GeoJson(Fiona):
     def __init__(self, *args):
@@ -457,11 +462,18 @@ class GeoJson(Fiona):
         # to shape geometries
         self.__geometries = [shape(ft['geometry']) for ft in _features]
 
-class FeatureCollection(EeGeometries, EeAttributes):
-    def __init__(self, *args, **kwargs):
-        super().__init__()
 
 class GeoPackage(Fiona):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        
+class PostGis(object):
+    def __init__(self, *args, **kwargs):
+        pass
+
+
+class FeatureCollection(EeGeometries, EeAttributes):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
 

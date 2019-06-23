@@ -126,7 +126,7 @@ def _kwargs_builder(args=None, kwargs=None, defaults=[], keys=[]):
     return result
 
 def _build_kwargs_from_args(args=None, defaults=[], keys=[]):
-    """ Build a standard dictionary from user-supplied *args or **kwargs
+    """ Build a dictionary from user-supplied *args or **kwargs
     function input """
     logger.debug("Input:%s",str(args))
     logger.debug("Type:%s",str(type(args)))
