@@ -16,6 +16,7 @@ import geopandas as gp
 import pandas as pd
 import json
 import magic
+
 import psycopg2
 
 import pyproj
@@ -23,6 +24,7 @@ import pyproj
 from shapely.geometry import shape
 
 from .do import Local, EE, Do, _build_kwargs_from_args
+from .network import PostGis
 
 import logging
 
@@ -464,11 +466,6 @@ class GeoJson(Fiona):
 class GeoPackage(Fiona):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        
-class PostGis(object):
-    def __init__(self, *args, **kwargs):
-        pass
 
 
 class FeatureCollection(EeGeometries, EeAttributes):

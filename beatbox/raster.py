@@ -32,16 +32,17 @@ import types
 import psutil
 # beatbox
 from .do import _build_kwargs_from_args
+from .network import PostGis
 # # Fickle beast handlers for Earth Engine
-# try:
-#     import ee
-#     ee.Initialize()
-#     _HAVE_EE = True
-# except Exception:
-#     _HAVE_EE = False
-#     logger.warning("Failed to load the Earth Engine API. "
-#                    "Check your installation. Will continue "
-#                    "to load but without the EE functionality.")
+try:
+    import ee
+    ee.Initialize()
+    _HAVE_EE = True
+except Exception:
+    _HAVE_EE = False
+    logger.warning("Failed to load the Earth Engine API. "
+                   "Check your installation. Will continue "
+                   "to load but without the EE functionality.")
 
 _DEFAULT_NA_VALUE = 65535
 _DEFAULT_DTYPE = np.uint16
@@ -65,8 +66,8 @@ class Raster(object):
         self._using_disc_caching = None  # Use mmcache? 
 
         self.ndv = _DEFAULT_NA_VALUE     # no data value
-        self._xsize = None                # number of x cells (meters/degrees)
-        self._ysize = None                # number of y cells(meters/degrees)
+        self._xsize = None               # number of x cells (meters/degrees)
+        self._ysize = None               # number of y cells(meters/degrees)
         self.geot = None                 # geographic transformation
         self.projection = None           # geographic projection
         self.dtype = None
@@ -579,3 +580,64 @@ def _is_number(num_list=None):
             return True
     except ValueError:
         return False
+
+def _is_existing_file(*args):
+    raise NotImplementedError
+
+def _is_wkt_str(*args):
+    """Returns a boolean if a user-provided string can be parsed by GDAL as WKT"""
+    raise NotImplementedError
+
+class Gdal(object):
+    def __init__(self, *args, **kwargs):
+        """Wrapper that leverages GDAL primatives to fetch raster data"""
+        # Default options
+        KNOWN_ARGS = ['file', 'wkt']
+        DEFAULTS = [None, None]
+
+        if len(args) > 0:
+            kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
+        else:
+            kwargs = _build_kwargs_from_args(kwargs, defaults=DEFAULTS, keys=KNOWN_ARGS)
+
+        # default options
+        if kwargs['file'] is not None:
+            self.read_file(kwargs['file'])
+        if kwargs['wkt'] is not None:
+            self.read_table(kwargs['wkt'])
+
+    def read_file(self, *args):
+        return gdal.Open(args[0])
+
+    def read_table(self, *args):
+        connection = PostGis(args[0]).to_wkt
+        raise NotImplementedError
+
+class EeAsset(object):
+    pass
+
+
+class EeImageCollection(object):
+    pass
+
+class RasterReimplementation(object):
+    def __init__(self, *args, **kwargs):
+        self.array = []
+        self.crs = []
+        self.crs_wkt = []
+        # argument handlers
+        KNOWN_ARGS = ['input','host','port', 'username', 'password']
+        DEFAULTS = [None, None, None, None, None]
+
+        if len(args) > 0:
+            kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
+        else:
+            kwargs = _build_kwargs_from_args(kwargs, defaults=DEFAULTS, keys=KNOWN_ARGS)
+        
+        self._builder(kwargs)
+
+    def _builder(self, *args, **kwargs):
+        if _is_existing_file(kwargs['input']):
+            return Gdal(file=kwargs['input'])
+        elif _is_wkt_str(kwargs['input']):
+            return Gdal(wkt=kwargs['input'])
