@@ -47,224 +47,6 @@ except Exception:
 _DEFAULT_NA_VALUE = 65535
 _DEFAULT_DTYPE = np.uint16
 _DEFAULT_RASTER_FORMAT = gdal.GetDriverByName('GTiff')
-
-class Raster(object):
-    """ Raster class is a wrapper for generating GeoRasters,
-    Numpy arrays, and Earth Engine Image objects. It opens files
-    and converts to other formats as needed for various backend
-    actions associated with Do.
-    :arg file string specifying the full path to a raster
-    file (typically a GeoTIFF) or an asset id for earth engine
-    :return None
-    """
-
-    def __init__(self, filename=None, array=None, dtype=None,
-                 disc_caching=None):
-        self._backend = "local"
-        self._array = None
-        self._filename = None
-        self._using_disc_caching = None  # Use mmcache? 
-
-        self.ndv = _DEFAULT_NA_VALUE     # no data value
-        self._xsize = None               # number of x cells (meters/degrees)
-        self._ysize = None               # number of y cells(meters/degrees)
-        self.geot = None                 # geographic transformation
-        self.projection = None           # geographic projection
-        self.dtype = None
-        # args[0]/filename=
-        self.filename = filename
-        # args[1]/array=
-        self.array = array
-        # args[2]/dtype=
-        if dtype is not None:
-            self.dtype = dtype
-        # args[3]/disc_cache=
-        if disc_caching is not None:
-            self._using_disc_caching = str(randint(1, 9E09)) + \
-                                       '_np_binary_array.dat'
-        # if we were passed a file argument, assume it's a
-        # path and try to open it
-        if self.filename is not None:
-            try:
-                self.open(self.filename)
-            except OSError:
-                raise OSError("couldn't open the filename provided")
-
-    def __copy__(self):
-        _raster = Raster()
-        _raster._array = copy(self._array)
-        _raster._backend = copy(self._backend)
-        _raster._filename = copy(self._filename)
-        _raster._using_disc_caching = copy(self._filename)
-        _raster.ndv = self.ndv
-        _raster._xsize = self._xsize
-        _raster._ysize = self._ysize
-        _raster.geot = self.geot
-        _raster.projection = self.projection
-        # if we are mem caching, generate a new tempfile
-        return _raster
-
-    def __deepcopy__(self, memodict={}):
-        return self.__copy__()
-
-    @property
-    def array(self):
-        return self._array
-
-    @array.setter
-    def array(self, *args):
-        """
-        Assign a numpy masked array to our Raster object
-        """
-        if args[0] is None:
-            self._array = None
-        else:
-            try:
-                self.dtype = args[0].dtype
-            except AttributeError as e:
-                logger.debug("array= expects a (masked) numpy array as input : %s -- skipping "
-                "setting dtype and just loading the array", e)
-            self._array = np.ma.masked_array(
-                args[0],
-                mask=self._array == self.ndv,
-                fill_value=self.ndv,
-                dtype=self.dtype)
-
-    @property
-    def filename(self):
-        return self._filename
-
-    @filename.setter
-    def filename(self, *args):
-        self._filename = args[0]
-
-    @property
-    def backend(self):
-        return self._backend
-
-    @backend.setter
-    def backend(self, *args):
-        self._backend = args[0]
-
-    def open(self, *args, **kwargs):
-        """ Open a local file handle for reading and assignment
-        :param file:
-        :return: None
-        """
-        # argument handlers
-        KNOWN_ARGS = ['file', 'dtype']
-        DEFAULTS = [self.filename, self.dtype]
-        if len(args) > 0:
-            kwargs = _build_kwargs_from_args(args, 
-                defaults=DEFAULTS, keys=KNOWN_ARGS)
-        else:
-            kwargs = _build_kwargs_from_args(kwargs, 
-                defaults=DEFAULTS, keys=KNOWN_ARGS)
-        # args[0]/file=
-        kwargs['file'] = kwargs.get('file', None)
-        if kwargs['file'] is None:
-            raise IndexError("invalid file= data")
-        # args[1]/dtype=
-        kwargs['dtype'] = kwargs.get('dtype', None)
-        # grab raster meta information from GeoRasters
-        try:
-            self.ndv, self._xsize, self._ysize, self.geot, self.projection, _dtype = \
-                get_geo_info(kwargs['file'])
-        except Exception:
-            raise AttributeError("problem processing file input -- is this"
-                " a raster file?")
-        # args[1]/dtype=
-        if kwargs['dtype'] is None:
-            # if the user didn't specify a type, just assume
-            # the 
-            self.dtype = _dtype
-        # re-cast our datatype as a numpy type, if needed
-        if type(self.dtype) == str:
-            self.dtype = _to_numpy_type(self.dtype)
-        self.ndv = _no_data_value_sanity_check(self)
-        # low-level call to gdal with explicit type specification
-        # that will store in memory or as a disc cache, depending
-        # on the state of our _using_disc_caching property
-        if self._using_disc_caching is not None:
-            # create a cache file
-            self.array = np.memmap(
-                self._using_disc_caching, dtype=self.dtype, mode='w+',
-                shape = (self._xsize, self._ysize))
-            # load file contents into the cache
-            self.array[:] = gdalnumeric.LoadFile(
-                filename=self.filename,
-                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(self.dtype))[:]
-        # by default, load the whole file into memory
-        else:
-            self.array = gdalnumeric.LoadFile(
-                filename=self.filename,
-                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(self.dtype)
-            )
-        # make sure we honor our no data value
-        self.array = np.ma.masked_array(
-            self.array,
-            mask=self.array == self.ndv,
-            fill_value=self.ndv
-        )
-
-    def write(self, filename=None, datatype=None, driver=_DEFAULT_RASTER_FORMAT):
-        """ Wrapper for GeoRaster's create_geotiff that writes a numpy array to
-        disk.
-        :param filename:
-        :param format:
-        :param driver:
-        :return:
-        """
-        if datatype is None:
-            datatype = gdal_array.NumericTypeCodeToGDALTypeCode(self.dtype)
-        if not filename:
-            filename = self.filename.replace(".tif", "")
-        try:
-            create_geotiff(
-                name=filename,
-                Array=self.array,
-                geot=self.geot,
-                projection=self.projection,
-                datatype=datatype,
-                driver=driver,
-                ndv=self.ndv,
-                xsize=self._xsize,
-                ysize=self._ysize)
-            logger.debug("write() : write succeeded")
-        except Exception as e:
-            logger.debug("write() : general failure attempting to write raster to disk : %s", e)
-            raise(e)
-
-    def to_numpy_array(self):
-        """ Returns numpy array values for our Raster object.
-        :return:
-        """
-        return self.array
-
-    def to_georaster(self):
-        """ Parses internal Raster elements and returns as a clean GeoRaster
-        object.
-        :return:
-        """
-        return GeoRaster(
-            self.array,
-            self.geot,
-            nodata_value=self.ndv,
-            projection=self.projection,
-            datatype=self.dtype
-        )
-
-    def to_ee_image(self):
-        """ Parses our internal numpy array as an Earth Engine ee.array object.
-        Would like to see this eventually become a standard interface for
-        dynamically ingesting raster data on Earth Engine, but it's currently
-        broken
-        """
-        logger.warning("to_ee_image() is an experimental feature -- we are"
-                       "still working through asset ingestion for earth engine.")
-        return ee.array(self.array)
-
-
 # short-hand string identifiers for numpy
 # types. Int, float, and byte will be the
 # most relevant for raster arrays, but the
@@ -285,20 +67,6 @@ _NUMPY_TYPES = {
   "complex128": np.complex128
 }
 
-def _to_numpy_type(user_str=None):
-    """
-    Parse our NUMPY_STR dictionary using regular expressions
-    for our user-specified function string.
-    :return:
-    """
-    user_str = str(user_str).lower()
-    for valid_type_str in list(_NUMPY_TYPES.keys()):
-        # user might pass a key with extra designators
-        # (like np.mean, numpy.median) -- let's
-        if bool(re.search(string=valid_type_str, pattern=user_str)):
-            return _NUMPY_TYPES[valid_type_str]
-    # default case
-    return None
 
 def crop(*args):
     return _local_crop(args)
@@ -619,6 +387,237 @@ class EeAsset(object):
 
 class EeImageCollection(object):
     pass
+
+class Raster(object):
+    """ Raster class is a wrapper for generating GeoRasters,
+    Numpy arrays, and Earth Engine Image objects. It opens files
+    and converts to other formats as needed for various backend
+    actions associated with Do.
+    :arg file string specifying the full path to a raster
+    file (typically a GeoTIFF) or an asset id for earth engine
+    :return None
+    """
+
+    def __init__(self, filename=None, array=None, dtype=None,
+                 disc_caching=None):
+        self._backend = "local"
+        self._array = None
+        self._filename = None
+        self._using_disc_caching = None  # Use mmcache? 
+
+        self.ndv = _DEFAULT_NA_VALUE     # no data value
+        self._xsize = None               # number of x cells (meters/degrees)
+        self._ysize = None               # number of y cells(meters/degrees)
+        self.geot = None                 # geographic transformation
+        self.projection = None           # geographic projection
+        self.dtype = None
+        # args[0]/filename=
+        self.filename = filename
+        # args[1]/array=
+        self.array = array
+        # args[2]/dtype=
+        if dtype is not None:
+            self.dtype = dtype
+        # args[3]/disc_cache=
+        if disc_caching is not None:
+            self._using_disc_caching = str(randint(1, 9E09)) + \
+                                       '_np_binary_array.dat'
+        # if we were passed a file argument, assume it's a
+        # path and try to open it
+        if self.filename is not None:
+            try:
+                self.open(self.filename)
+            except OSError:
+                raise OSError("couldn't open the filename provided")
+
+    def __copy__(self):
+        _raster = Raster()
+        _raster._array = copy(self._array)
+        _raster._backend = copy(self._backend)
+        _raster._filename = copy(self._filename)
+        _raster._using_disc_caching = copy(self._filename)
+        _raster.ndv = self.ndv
+        _raster._xsize = self._xsize
+        _raster._ysize = self._ysize
+        _raster.geot = self.geot
+        _raster.projection = self.projection
+        # if we are mem caching, generate a new tempfile
+        return _raster
+
+    def __deepcopy__(self, memodict={}):
+        return self.__copy__()
+
+    @property
+    def array(self):
+        return self._array
+
+    @array.setter
+    def array(self, *args):
+        """
+        Assign a numpy masked array to our Raster object
+        """
+        if args[0] is None:
+            self._array = None
+        else:
+            try:
+                self.dtype = args[0].dtype
+            except AttributeError as e:
+                logger.debug("array= expects a (masked) numpy array as input : %s -- skipping "
+                "setting dtype and just loading the array", e)
+            self._array = np.ma.masked_array(
+                args[0],
+                mask=self._array == self.ndv,
+                fill_value=self.ndv,
+                dtype=self.dtype)
+
+    @property
+    def filename(self):
+        return self._filename
+
+    @filename.setter
+    def filename(self, *args):
+        self._filename = args[0]
+
+    @property
+    def backend(self):
+        return self._backend
+
+    @backend.setter
+    def backend(self, *args):
+        self._backend = args[0]
+
+    def open(self, *args, **kwargs):
+        """ Open a local file handle for reading and assignment
+        :param file:
+        :return: None
+        """
+        # argument handlers
+        KNOWN_ARGS = ['file', 'dtype']
+        DEFAULTS = [self.filename, self.dtype]
+        if len(args) > 0:
+            kwargs = _build_kwargs_from_args(args, 
+                defaults=DEFAULTS, keys=KNOWN_ARGS)
+        else:
+            kwargs = _build_kwargs_from_args(kwargs, 
+                defaults=DEFAULTS, keys=KNOWN_ARGS)
+        # args[0]/file=
+        kwargs['file'] = kwargs.get('file', None)
+        if kwargs['file'] is None:
+            raise IndexError("invalid file= data")
+        # args[1]/dtype=
+        kwargs['dtype'] = kwargs.get('dtype', None)
+        # grab raster meta information from GeoRasters
+        try:
+            self.ndv, self._xsize, self._ysize, self.geot, self.projection, _dtype = \
+                get_geo_info(kwargs['file'])
+        except Exception:
+            raise AttributeError("problem processing file input -- is this"
+                " a raster file?")
+        # args[1]/dtype=
+        if kwargs['dtype'] is None:
+            # if the user didn't specify a type, just assume
+            # the 
+            self.dtype = _dtype
+        # re-cast our datatype as a numpy type, if needed
+        if type(self.dtype) == str:
+            self.dtype = _to_numpy_type(self.dtype)
+        self.ndv = _no_data_value_sanity_check(self)
+        # low-level call to gdal with explicit type specification
+        # that will store in memory or as a disc cache, depending
+        # on the state of our _using_disc_caching property
+        if self._using_disc_caching is not None:
+            # create a cache file
+            self.array = np.memmap(
+                self._using_disc_caching, dtype=self.dtype, mode='w+',
+                shape = (self._xsize, self._ysize))
+            # load file contents into the cache
+            self.array[:] = gdalnumeric.LoadFile(
+                filename=self.filename,
+                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(self.dtype))[:]
+        # by default, load the whole file into memory
+        else:
+            self.array = gdalnumeric.LoadFile(
+                filename=self.filename,
+                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(self.dtype)
+            )
+        # make sure we honor our no data value
+        self.array = np.ma.masked_array(
+            self.array,
+            mask=self.array == self.ndv,
+            fill_value=self.ndv
+        )
+
+    def write(self, filename=None, datatype=None, driver=_DEFAULT_RASTER_FORMAT):
+        """ Wrapper for GeoRaster's create_geotiff that writes a numpy array to
+        disk.
+        :param filename:
+        :param format:
+        :param driver:
+        :return:
+        """
+        if datatype is None:
+            datatype = gdal_array.NumericTypeCodeToGDALTypeCode(self.dtype)
+        if not filename:
+            filename = self.filename.replace(".tif", "")
+        try:
+            create_geotiff(
+                name=filename,
+                Array=self.array,
+                geot=self.geot,
+                projection=self.projection,
+                datatype=datatype,
+                driver=driver,
+                ndv=self.ndv,
+                xsize=self._xsize,
+                ysize=self._ysize)
+            logger.debug("write() : write succeeded")
+        except Exception as e:
+            logger.debug("write() : general failure attempting to write raster to disk : %s", e)
+            raise(e)
+
+    def to_numpy_array(self):
+        """ Returns numpy array values for our Raster object.
+        :return:
+        """
+        return self.array
+
+    def to_georaster(self):
+        """ Parses internal Raster elements and returns as a clean GeoRaster
+        object.
+        :return:
+        """
+        return GeoRaster(
+            self.array,
+            self.geot,
+            nodata_value=self.ndv,
+            projection=self.projection,
+            datatype=self.dtype
+        )
+
+    def to_ee_image(self):
+        """ Parses our internal numpy array as an Earth Engine ee.array object.
+        Would like to see this eventually become a standard interface for
+        dynamically ingesting raster data on Earth Engine, but it's currently
+        broken
+        """
+        logger.warning("to_ee_image() is an experimental feature -- we are"
+                       "still working through asset ingestion for earth engine.")
+        return ee.array(self.array)
+
+def _to_numpy_type(user_str=None):
+    """
+    Parse our NUMPY_STR dictionary using regular expressions
+    for our user-specified function string.
+    :return:
+    """
+    user_str = str(user_str).lower()
+    for valid_type_str in list(_NUMPY_TYPES.keys()):
+        # user might pass a key with extra designators
+        # (like np.mean, numpy.median) -- let's
+        if bool(re.search(string=valid_type_str, pattern=user_str)):
+            return _NUMPY_TYPES[valid_type_str]
+    # default case
+    return None
 
 class RasterReimplementation(object):
     def __init__(self, *args, **kwargs):
