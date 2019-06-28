@@ -1,7 +1,18 @@
 #!/usr/bin/env python3
 
+"""
+Classes and modules implemented below are essentially wrappers
+around GDAL primatives. Some higher-level hooks for GeoRasters 
+and Google Earth Engine are provided that allow easy access to 
+raster manipulations from these interfaces. The goal here is 
+not to re-invent the wheel. It's to lean-on the base 
+functionality of other frameworks where we can and use GDAL
+primatives as a base for extending the functionality of GeoRasters 
+et al only where needed.
+"""
+
 __author__ = "Kyle Taylor"
-__copyright__ = "Copyright 2018, Playa Lakes Joint Venture"
+__copyright__ = "Copyright 2019, Playa Lakes Joint Venture"
 __credits__ = ["Kyle Taylor", "Alex Daniels", "Meghan Bogaerts",
                "Stephen Chang"]
 __license__ = "GPL"
@@ -33,7 +44,7 @@ import psutil
 # beatbox
 from .do import _build_kwargs_from_args
 from .network import PostGis
-# # Fickle beast handlers for Earth Engine
+# Fickle beast handlers for Earth Engine
 try:
     import ee
     ee.Initialize()
@@ -47,10 +58,12 @@ except Exception:
 _DEFAULT_NA_VALUE = 65535
 _DEFAULT_DTYPE = np.uint16
 _DEFAULT_RASTER_FORMAT = gdal.GetDriverByName('GTiff')
+
 # short-hand string identifiers for numpy
 # types. Int, float, and byte will be the
 # most relevant for raster arrays, but the
 # gang is all here
+
 _NUMPY_TYPES = {
   "int": np.intc,
   "uint8": np.uint8,
@@ -322,7 +335,7 @@ def _est_array_size(obj=None, byte_size=None, dtype=None):
 
 
 def _local_process_array_as_blocks(*args):
-    """ Accepts an array object and splits it into chunks that can be handled
+    """Accepts an array object and splits it into chunks that can be handled
     stepwise
     :param args:
     :return:
@@ -336,7 +349,7 @@ def _local_process_array_as_blocks(*args):
 
 
 def _is_number(num_list=None):
-    """ Determine whether any item in a list is not a number.
+    """Determine whether any item in a list is not a number.
     :param args[0]: a python list object
     :return: True on all integers,
     """
@@ -350,15 +363,27 @@ def _is_number(num_list=None):
         return False
 
 def _is_existing_file(*args):
+    """
+    :param args:
+    :return:
+    """
     raise NotImplementedError
 
 def _is_wkt_str(*args):
-    """Returns a boolean if a user-provided string can be parsed by GDAL as WKT"""
+    """Returns a boolean if a user-provided string can be parsed by GDAL as WKT
+    :param args:
+    :return:
+    """
     raise NotImplementedError
+
 
 class Gdal(object):
     def __init__(self, *args, **kwargs):
-        """Wrapper that leverages GDAL primatives to fetch raster data"""
+        """Wrapper for gdal primatives to fetch raster data from a file 
+        or SQL database through WKT strings
+        :param args:
+        :return:
+        """
         # Default options
         KNOWN_ARGS = ['file', 'wkt']
         DEFAULTS = [None, None]
@@ -381,12 +406,14 @@ class Gdal(object):
         connection = PostGis(args[0]).to_wkt
         raise NotImplementedError
 
+
 class EeAsset(object):
     pass
 
 
 class EeImageCollection(object):
     pass
+
 
 class Raster(object):
     """ Raster class is a wrapper for generating GeoRasters,
