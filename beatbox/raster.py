@@ -2,12 +2,12 @@
 
 """
 Classes and modules implemented below are essentially wrappers
-around GDAL primatives. Some higher-level hooks for GeoRasters 
+around GDAL/Numpy primatives. Some higher-level hooks for GeoRasters 
 and Google Earth Engine are provided that allow easy access to 
 raster manipulations from these interfaces. The goal here is 
 not to re-invent the wheel. It's to lean-on the base 
 functionality of other frameworks where we can and use GDAL
-primatives as a base for extending the functionality of GeoRasters 
+and Numpy as a base for extending the functionality of GeoRasters 
 et al only where needed.
 """
 
