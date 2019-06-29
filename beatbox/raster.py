@@ -378,21 +378,24 @@ class Gdal(object):
         else:
             kwargs = _build_kwargs_from_args(kwargs, defaults=DEFAULTS, keys=KNOWN_ARGS)
    
-        self._filename = kwargs.get('file', None)
-        self._wkt_string = kwargs.get('wkt', None)
-        self._use_disc_caching = kwargs.get('use_disc_caching', None)
-        self._dtype = kwargs.get('use_disc_caching', None)
-        self._ndv = kwargs.get('ndv', None)
-        self._x_size = kwargs.get('x_size', None)
-        self._y_size = kwargs.get('x_size', None)
+        self._filename = kwargs['file']
+        self._wkt_string = kwargs['wkt']
+        self._use_disc_caching = kwargs['use_disc_caching']
+        self._dtype = kwargs['use_disc_caching']
+        self._ndv = kwargs['ndv']
+        self._x_size = kwargs['x_size']
+        self._y_size = kwargs['y_size']
 
         if self._use_disc_caching is not None:
             self._use_disc_caching = str(randint(1, 9E09)) + \
                                        '_np_array.dat'
 
-    def open(self):
+        self.open_file()
+        
+    def open_file(self):
         """
         Read a raster file from disc as a formatted numpy array
+        :rval none:
         """
         # grab raster meta information from GeoRasters
         try:
@@ -404,11 +407,11 @@ class Gdal(object):
         # call gdal with explicit type specification
         # that will store in memory or as a disc cache, depending
         # on the state of our _use_disc_caching property
-        if self._use_disc_caching:
+        if self._use_disc_caching is None:
             # create a cache file
             self.array = np.memmap(
-                self._use_disc_caching, dtype=self._dtype, mode='w+',
-                shape = (self._x_size, self._y_size))
+                filename=self._use_disc_caching, dtype=self._dtype, mode='w+',
+                shape = (self._y_size, self._x_size))
             # load file contents into the cache
             self.array[:] = gdalnumeric.LoadFile(
                 filename=self._filename,
@@ -469,7 +472,7 @@ class Raster(object):
         # path and try to open it
         if self.filename is not None:
             try:
-                self.open(self.filename)
+                self.open_file(self.filename)
             except OSError:
                 raise OSError("couldn't open the filename provided")
 
@@ -529,7 +532,7 @@ class Raster(object):
     def backend(self, *args):
         self._backend = args[0]
 
-    def open(self, *args, **kwargs):
+    def open_file(self, *args, **kwargs):
         """ Open a local file handle for reading and assignment
         :param file:
         :return: None
@@ -650,6 +653,7 @@ def _to_numpy_type(user_str=None):
     """
     Parse our NUMPY_STR dictionary using regular expressions
     for our user-specified function string.
+    :param str user_str: User-specified data type as string (e.g., 'int8', 'float32')
     :return:
     """
     user_str = str(user_str).lower()
@@ -675,10 +679,10 @@ class RasterReimplementation(object):
         else:
             kwargs = _build_kwargs_from_args(kwargs, defaults=DEFAULTS, keys=KNOWN_ARGS)
         
-        self._builder(kwargs)
+        self._builder(**kwargs)
 
-    def _builder(self, *args, **kwargs):
+    def _builder(self, **kwargs):
         if _is_existing_file(kwargs['input']):
-            return Gdal(file=kwargs['input']).open()
+            return Gdal(file=kwargs['input'])
         elif _is_wkt_str(kwargs['input']):
-            return Gdal(wkt=kwargs['input']).open()
+            return Gdal(wkt=kwargs['input'])
