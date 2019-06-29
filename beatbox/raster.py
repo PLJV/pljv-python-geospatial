@@ -425,7 +425,7 @@ class Gdal(object):
         """
         # grab raster meta information from GeoRasters
         try:
-            self.ndv, self._x_size, self._y_size, self.geot, self.projection, self._dtype = \
+            self._ndv, self._x_size, self._y_size, self._geot, self._projection, self._dtype = \
                 get_geo_info(self._filename)
         except Exception:
             raise AttributeError("problem processing file input -- is this"
@@ -436,17 +436,17 @@ class Gdal(object):
         if self._using_disc_caching is not None:
             # create a cache file
             self.array = np.memmap(
-                self._using_disc_caching, dtype=self.dtype, mode='w+',
-                shape = (self._xsize, self._ysize))
+                self._using_disc_caching, dtype=self._dtype, mode='w+',
+                shape = (self._x_size, self._y_size))
             # load file contents into the cache
             self.array[:] = gdalnumeric.LoadFile(
-                filename=self.filename,
-                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(self.dtype))[:]
+                filename=self._filename,
+                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(self._dtype))[:]
         # by default, load the whole file into memory
         else:
             self.array = gdalnumeric.LoadFile(
-                filename=self.filename,
-                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(self.dtype)
+                filename=self._filename,
+                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(self._dtype)
             )
         # make sure we honor our no data value
         self.array = np.ma.masked_array(
