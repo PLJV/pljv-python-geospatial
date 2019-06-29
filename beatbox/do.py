@@ -25,11 +25,13 @@ class Backend(object):
 
 
 class Local(Backend):
-    pass
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError
 
 
 class EE(Backend):
-    pass
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError
 
 
 class Do(Backend):
@@ -37,11 +39,10 @@ class Do(Backend):
         """
         Do is a dictcomp interface for performing arbitrary spatial tasks with
         Vector and Raster objects
-        :param this: run 'this' function
-        :param that: Backend class describing with 'this' function's
-        parameters
-        :param args: list of any additional positional arguments that are
-        passed to the 'this' function
+
+        :param function this: run 'this' function
+        :param class that: Backend class describing with 'this' function's parameters
+        :param list args: list of any additional positional arguments that are passed to the 'this' function
         """
         if this is None or that is None:
             try:

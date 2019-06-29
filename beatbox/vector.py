@@ -33,15 +33,6 @@ _DEFAULT_EPSG = 4326
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# # Fickle beast handlers for Earth Engine
-try:
-    import ee
-    ee.Initialize()
-except Exception:
-    logger.warning("Failed to load the Earth Engine API. "
-                   "Check your installation. Will continue "
-                   "to load but without the EE functionality.")
-
 def rebuild_crs(*args):
     """
     Build a CRS dict for a user-specified Vector or GeoDataFrame object
@@ -69,10 +60,6 @@ def _local_rebuild_crs(*args):
     _gdf = args[0]
     _gdf.crs = fiona.crs.from_epsg(int(_gdf.crs['init'].split(":")[1]))
     return _gdf
-
-
-def _ee_rebuild_crs(*args):
-    pass
 
 
 def _geom_units(*args):
@@ -347,7 +334,8 @@ class Vector(object):
         return GeoJson()
 
     def to_ee_feature_collection(self):
-        return ee.FeatureCollection(self.to_geojson(stringify=True))
+        raise NotImplementedError
+        #return ee.FeatureCollection(self.to_geojson(stringify=True))
 
 
 class Fiona(object):

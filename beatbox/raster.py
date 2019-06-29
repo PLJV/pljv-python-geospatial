@@ -43,16 +43,6 @@ import psutil
 # beatbox
 from .do import _build_kwargs_from_args
 from .network import PostGis
-# Fickle beast handlers for Earth Engine
-try:
-    import ee
-    ee.Initialize()
-    _HAVE_EE = True
-except Exception:
-    _HAVE_EE = False
-    logger.warning("Failed to load the Earth Engine API. "
-                   "Check your installation. Will continue "
-                   "to load but without the EE functionality.")
 
 _DEFAULT_NA_VALUE = 65535
 _DEFAULT_DTYPE = np.uint16
@@ -195,7 +185,7 @@ def _local_crop(raster=None, shape=None, *args):
     # sanity check and then do our crop operation
     # and return to user
     _enough_ram = _local_ram_sanity_check(raster.array)
-    if not _enough_ram['available'] and not raster._using_disc_caching:
+    if not _enough_ram['available'] and not raster._use_disc_caching:
         logger.warning("There doesn't apprear to be enough free memory"
                        " available for our raster operation. You should use"
                        "disc caching options with your dataset. Est Megabytes "
@@ -214,31 +204,12 @@ def _local_clip(raster=None, shape=None):
         raise IndexError("invalid shape= argument specified")
     return _local_crop(raster=raster, shape=shape)
 
-def _ee_extract(*args):
-    """ Earth Engine extract handler
-    :param args:
-    :return:
-    """
-    pass
-
 def _local_extract(*args):
     """ Local raster extraction handler
     :param args:
     :return:
     """
     pass
-
-
-def _ee_extract(*args):
-    """ EE raster extraction handler
-    :param args:
-    :return:
-    """
-    if not _HAVE_EE:
-        raise AttributeError("Requested Earth Engine functionality, "
-                             "but we failed to load and initialize the ee"
-                             "package.")
-
 
 def _local_reproject(*args):
     pass
@@ -409,15 +380,15 @@ class Gdal(object):
    
         self._filename = kwargs.get('file', None)
         self._wkt_string = kwargs.get('wkt', None)
-        self._using_disc_caching = kwargs.get('use_disc_caching', None)
+        self._use_disc_caching = kwargs.get('use_disc_caching', None)
         self._dtype = kwargs.get('use_disc_caching', None)
         self._ndv = kwargs.get('ndv', None)
         self._x_size = kwargs.get('x_size', None)
         self._y_size = kwargs.get('x_size', None)
 
-        if self._disc_caching is not None:
-            self._using_disc_caching = str(randint(1, 9E09)) + \
-                                       '_np_binary_array.dat'
+        if self._use_disc_caching is not None:
+            self._use_disc_caching = str(randint(1, 9E09)) + \
+                                       '_np_array.dat'
 
     def open(self):
         """
@@ -432,41 +403,33 @@ class Gdal(object):
                 " a raster file?")
         # call gdal with explicit type specification
         # that will store in memory or as a disc cache, depending
-        # on the state of our _using_disc_caching property
-        if self._using_disc_caching is not None:
+        # on the state of our _use_disc_caching property
+        if self._use_disc_caching:
             # create a cache file
             self.array = np.memmap(
-                self._using_disc_caching, dtype=self._dtype, mode='w+',
+                self._use_disc_caching, dtype=self._dtype, mode='w+',
                 shape = (self._x_size, self._y_size))
             # load file contents into the cache
             self.array[:] = gdalnumeric.LoadFile(
                 filename=self._filename,
-                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(self._dtype))[:]
+                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(_to_numpy_type(self._dtype))
+            )[:]
         # by default, load the whole file into memory
         else:
             self.array = gdalnumeric.LoadFile(
                 filename=self._filename,
-                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(self._dtype)
+                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(_to_numpy_type(self._dtype))
             )
         # make sure we honor our no data value
         self.array = np.ma.masked_array(
             self.array,
-            mask=self.array == self.ndv,
-            fill_value=self.ndv
+            mask=self.array == self._ndv,
+            fill_value=self._ndv
         )
 
     def read_table(self, *args):
         connection = PostGis(args[0]).to_wkt
         raise NotImplementedError
-
-
-class EeAsset(object):
-    pass
-
-
-class EeImageCollection(object):
-    pass
-
 
 class Raster(object):
     """ Raster class is a wrapper for generating GeoRasters,
@@ -483,7 +446,7 @@ class Raster(object):
         self._backend = "local"
         self._array = None
         self._filename = None
-        self._using_disc_caching = None  # Use mmcache? 
+        self._use_disc_caching = None  # Use mmcache? 
 
         self.ndv = _DEFAULT_NA_VALUE     # no data value
         self._xsize = None               # number of x cells (meters/degrees)
@@ -500,7 +463,7 @@ class Raster(object):
             self.dtype = dtype
         # args[3]/disc_cache=
         if disc_caching is not None:
-            self._using_disc_caching = str(randint(1, 9E09)) + \
+            self._use_disc_caching = str(randint(1, 9E09)) + \
                                        '_np_binary_array.dat'
         # if we were passed a file argument, assume it's a
         # path and try to open it
@@ -515,7 +478,7 @@ class Raster(object):
         _raster._array = copy(self._array)
         _raster._backend = copy(self._backend)
         _raster._filename = copy(self._filename)
-        _raster._using_disc_caching = copy(self._filename)
+        _raster._use_disc_caching = copy(self._filename)
         _raster.ndv = self.ndv
         _raster._xsize = self._xsize
         _raster._ysize = self._ysize
@@ -604,11 +567,11 @@ class Raster(object):
         self.ndv = _no_data_value_sanity_check(self)
         # low-level call to gdal with explicit type specification
         # that will store in memory or as a disc cache, depending
-        # on the state of our _using_disc_caching property
-        if self._using_disc_caching is not None:
+        # on the state of our _use_disc_caching property
+        if self._use_disc_caching is not None:
             # create a cache file
             self.array = np.memmap(
-                self._using_disc_caching, dtype=self.dtype, mode='w+',
+                self._use_disc_caching, dtype=self.dtype, mode='w+',
                 shape = (self._xsize, self._ysize))
             # load file contents into the cache
             self.array[:] = gdalnumeric.LoadFile(
@@ -680,9 +643,8 @@ class Raster(object):
         dynamically ingesting raster data on Earth Engine, but it's currently
         broken
         """
-        logger.warning("to_ee_image() is an experimental feature -- we are"
-                       "still working through asset ingestion for earth engine.")
-        return ee.array(self.array)
+        raise NotImplementedError
+        #return ee.array(self.array)
 
 def _to_numpy_type(user_str=None):
     """
@@ -717,6 +679,6 @@ class RasterReimplementation(object):
 
     def _builder(self, *args, **kwargs):
         if _is_existing_file(kwargs['input']):
-            return Gdal(file=kwargs['input']).read_file()
+            return Gdal(file=kwargs['input']).open()
         elif _is_wkt_str(kwargs['input']):
-            return Gdal(wkt=kwargs['input']).read_table()
+            return Gdal(wkt=kwargs['input']).open()
