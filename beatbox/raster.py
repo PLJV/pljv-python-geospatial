@@ -7,7 +7,7 @@ and Google Earth Engine are provided that allow easy access to
 raster manipulations from these interfaces. The goal here is 
 not to re-invent the wheel. It's to lean-on the base 
 functionality of other frameworks where we can and use GDAL
-and Numpy as a base for extending the functionality of GeoRasters 
+and NumPy as a base for extending the functionality of GeoRasters 
 et al only where needed.
 """
 
@@ -32,8 +32,7 @@ import re
 from random import randint
 from copy import copy
 # raster manipulation
-from georasters import GeoRaster
-from georasters import get_geo_info, create_geotiff, merge
+from georasters import GeoRaster, get_geo_info, create_geotiff, merge
 import gdalnumeric
 import gdal
 import numpy as np
@@ -370,37 +369,91 @@ def _is_existing_file(*args):
     raise NotImplementedError
 
 def _is_wkt_str(*args):
-    """Returns a boolean if a user-provided string can be parsed by GDAL as WKT
-    :param args:
-    :return:
     """
+    Returns a boolean if a user-provided string can be parsed by GDAL as WKT
+
+    :param str wkt: A GDAL-formatted WKT string; e.g., that is can be used to open rasters on a SQL server.
+    :return: Returns true if the wkt str appear valid
+    :rtype: Boolean
+    """
+    # Default options
+    KNOWN_ARGS = ['wkt']
+    DEFAULTS = [None]
+
+    if len(args) > 0:
+        kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
+    else:
+        kwargs = _build_kwargs_from_args(kwargs, defaults=DEFAULTS, keys=KNOWN_ARGS)
+
     raise NotImplementedError
 
 
 class Gdal(object):
     def __init__(self, *args, **kwargs):
-        """Wrapper for gdal primatives to fetch raster data from a file 
-        or SQL database through WKT strings
-        :param args:
-        :return:
         """
-        # Default options
-        KNOWN_ARGS = ['file', 'wkt']
-        DEFAULTS = [None, None]
+        Wrapper for gdal primatives to fetch raster data from a file 
+        or SQL database through WKT strings
+
+        :param str file: Full path to a raster file you'd like to open.
+        :param str wkt: A GDAL-formatted WKT string; e.g., that can be used to open rasters on a SQL server.
+        :param bool use_disc_caching: Should we attempt to read our raster into RAM or should we cache it to disc? 
+        """
+        # Define our known parameters and default properties
+        KNOWN_ARGS = ['file', 'wkt', 'use_disc_caching', 'dtype', 'ndv', 'x_size', 'y_size']
+        DEFAULTS = [None, None, False, None, _DEFAULT_NA_VALUE, None, None]
 
         if len(args) > 0:
             kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
         else:
             kwargs = _build_kwargs_from_args(kwargs, defaults=DEFAULTS, keys=KNOWN_ARGS)
+   
+        self._filename = kwargs.get('file', None)
+        self._wkt_string = kwargs.get('wkt', None)
+        self._using_disc_caching = kwargs.get('use_disc_caching', None)
+        self._dtype = kwargs.get('use_disc_caching', None)
+        self._ndv = kwargs.get('ndv', None)
+        self._x_size = kwargs.get('x_size', None)
+        self._y_size = kwargs.get('x_size', None)
 
-        # default options
-        if kwargs['file'] is not None:
-            self.read_file(kwargs['file'])
-        if kwargs['wkt'] is not None:
-            self.read_table(kwargs['wkt'])
+        if self._disc_caching is not None:
+            self._using_disc_caching = str(randint(1, 9E09)) + \
+                                       '_np_binary_array.dat'
 
-    def read_file(self, *args):
-        return gdal.Open(args[0])
+    def open(self):
+        """
+        Read a raster file from disc as a formatted numpy array
+        """
+        # grab raster meta information from GeoRasters
+        try:
+            self.ndv, self._x_size, self._y_size, self.geot, self.projection, self._dtype = \
+                get_geo_info(self._filename)
+        except Exception:
+            raise AttributeError("problem processing file input -- is this"
+                " a raster file?")
+        # call gdal with explicit type specification
+        # that will store in memory or as a disc cache, depending
+        # on the state of our _using_disc_caching property
+        if self._using_disc_caching is not None:
+            # create a cache file
+            self.array = np.memmap(
+                self._using_disc_caching, dtype=self.dtype, mode='w+',
+                shape = (self._xsize, self._ysize))
+            # load file contents into the cache
+            self.array[:] = gdalnumeric.LoadFile(
+                filename=self.filename,
+                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(self.dtype))[:]
+        # by default, load the whole file into memory
+        else:
+            self.array = gdalnumeric.LoadFile(
+                filename=self.filename,
+                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(self.dtype)
+            )
+        # make sure we honor our no data value
+        self.array = np.ma.masked_array(
+            self.array,
+            mask=self.array == self.ndv,
+            fill_value=self.ndv
+        )
 
     def read_table(self, *args):
         connection = PostGis(args[0]).to_wkt
@@ -664,6 +717,6 @@ class RasterReimplementation(object):
 
     def _builder(self, *args, **kwargs):
         if _is_existing_file(kwargs['input']):
-            return Gdal(file=kwargs['input'])
+            return Gdal(file=kwargs['input']).read_file()
         elif _is_wkt_str(kwargs['input']):
-            return Gdal(wkt=kwargs['input'])
+            return Gdal(wkt=kwargs['input']).read_table()
