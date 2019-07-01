@@ -74,15 +74,17 @@ def crop(*args):
     return _local_crop(args)
 
 def extract(*args):
-    """ Accept a series of 'with' arguments and uses an appropriate backend to
-    perform an extract operation with raster data
+    """
+    Accept a series of 'with' arguments and uses an appropriate
+    backend to perform an extract operation with raster data
     :param args:
     :return:
     """
 
 def binary_reclassify(array=None, match=None, *args):
-    """ Generalized version of binary_reclassify that can accomodate
-    a local numpy array or processing on EE
+    """
+    Generalized version of binary_reclassify that can accomodate a local numpy 
+    array or processing on EE
     :param args:
     :return:
     """
@@ -118,13 +120,13 @@ def binary_reclassify(array=None, match=None, *args):
 
 def _local_binary_reclassify(raster=None, match=None, invert=None,
                              dtype=np.uint8):
-    """ Binary reclassification of input data. All cell values in
+    """
+    Binary reclassification of input data. All cell values in
     a numpy array are reclassified as uint8 (boolean) based on
     whether they match or do not match the values of an input match
     array.
-    :param: raster : a Raster, GeoRaster, or related generator object
-    :param: match : a list object of integers specifying match values
-    for reclassification
+    :param obj raster: a Raster, GeoRaster, or related generator object
+    :param list match: a list object of integers specifying match values for reclassification
     """
     # args[0]/raster=
     if raster is None:
@@ -170,12 +172,14 @@ def _local_binary_reclassify(raster=None, match=None, invert=None,
 
 
 def _local_reclassify(*args):
-    pass
+    raise NotImplementedError
 
 
 def _local_crop(raster=None, shape=None, *args):
-    """ Wrapper for georasters.clip that will preform a crop operation on
-    input raster"""
+    """
+    Wrapper for georasters.clip that will preform a crop operation on
+    input raster
+    """
     # args[0] / raster=
     if raster is None:
         raise IndexError("invalid raster= argument specified")
@@ -195,7 +199,9 @@ def _local_crop(raster=None, shape=None, *args):
 
 
 def _local_clip(raster=None, shape=None):
-    """ Wrapper for a crop operation """
+    """ 
+    Wrapper for a crop operation 
+    """
     # args[0]/raster=
     if raster is None:
         raise IndexError("invalid raster= argument specified")
@@ -205,7 +211,8 @@ def _local_clip(raster=None, shape=None):
     return _local_crop(raster=raster, shape=shape)
 
 def _local_extract(*args):
-    """ Local raster extraction handler
+    """ 
+    Local raster extraction handler
     :param args:
     :return:
     """
@@ -216,7 +223,8 @@ def _local_reproject(*args):
 
 
 def _local_merge(rasters=None):
-    """ Wrapper for georasters.merge that simplifies merging raster segments
+    """ 
+    Wrapper for georasters.merge that simplifies merging raster segments
     returned by parallel operations.
     """
     if rasters is None:
@@ -224,8 +232,12 @@ def _local_merge(rasters=None):
     return merge(rasters)
 
 def _local_split(raster=None, n=None):
-    """ Wrapper for np._array_split. Splits an input array into n (mostly)
+    """ 
+    Wrapper for np._array_split. Splits an input array into n (mostly)
     equal segments, possibly for a parallelized operation.
+    :param np.array raster:
+    :param int n: number of splits to use for np.array_split 
+    :return:
     """
     # args[0]/raster=
     if raster is None:
@@ -240,7 +252,12 @@ def _local_split(raster=None, n=None):
 
 
 def _local_ram_sanity_check(array=None):
-    # args[0] (Raster object, GeoRaster, or numpy array)
+    """
+    Determine if there is enough ram for an operation and return 
+    the amount of ram available (in bytes) as a dictionary 
+    :param np.array array: NumPy array 
+    :return dict:
+    """
     if array is None:
         raise IndexError("first pos. argument should be some kind of "
                          "raster data")
@@ -282,20 +299,17 @@ def _est_array_size(obj=None, byte_size=None, dtype=None):
     # args[0] is a list containing array dimensions
     if isinstance(obj, list) or isinstance(obj, tuple):
         _array_len = np.prod(obj)
-    # args[0] is a GeoRaster object
     elif isinstance(obj, GeoRaster):
         dtype = obj.datatype
         _array_len = np.prod(obj.shape)
         _byte_size = _to_numpy_type(obj.datatype)
-    # args[0] is a Raster object
     elif isinstance(obj, Raster):
         dtype = obj.array.dtype
         _array_len = np.prod(obj.array.shape)
         _byte_size = _to_numpy_type(obj.array.dtype)
-    # args[0] is something else?
     else:
         _array_len = len(obj)
-    # args[1]/dtype= argument was specified
+    
     if dtype is not None:
         _byte_size = sys.getsizeof(_to_numpy_type(dtype))
     else:
@@ -305,9 +319,10 @@ def _est_array_size(obj=None, byte_size=None, dtype=None):
 
 
 def _local_process_array_as_blocks(*args):
-    """Accepts an array object and splits it into chunks that can be handled
+    """
+    Accepts an array object and splits it into chunks that can be handled
     stepwise
-    :param args:
+    :param np.array np.array: NumPy array object
     :return:
     """
     _array = args[0].raster   # numpy array
@@ -319,7 +334,8 @@ def _local_process_array_as_blocks(*args):
 
 
 def _is_number(num_list=None):
-    """Determine whether any item in a list is not a number.
+    """
+    Determine whether any item in a list is not a number.
     :param args[0]: a python list object
     :return: True on all integers,
     """
@@ -381,7 +397,7 @@ class Gdal(object):
         self._filename = kwargs['file']
         self._wkt_string = kwargs['wkt']
         self._use_disc_caching = kwargs['use_disc_caching']
-        self._dtype = kwargs['use_disc_caching']
+        self._dtype = kwargs['dtype']
         self._ndv = kwargs['ndv']
         self._x_size = kwargs['x_size']
         self._y_size = kwargs['y_size']
