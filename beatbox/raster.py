@@ -364,7 +364,7 @@ def _is_wkt_str(wkt, *args):
 
 
 class Gdal(object):
-    def __init__(self, file, wkt, use_disc_caching, dtype, ndv, x_size, y_size, *args):
+    def __init__(self, *args):
         """
         Wrapper for gdal primatives to fetch raster data from a file 
         or SQL database through WKT strings
@@ -373,13 +373,20 @@ class Gdal(object):
         :param str wkt: A GDAL-formatted WKT string; e.g., that can be used to open rasters on a SQL server.
         :param bool use_disc_caching: Should we attempt to read our raster into RAM or should we cache it to disc? 
         """
-        file = args[0].get('file', None)
-        wkt = args[0].get('wkt', None)
-        dtype = args[0].get('dtype', _DEFAULT_DTYPE)
-        ndv = args[0].get('ndv', _DEFAULT_NA_VALUE)
-        x_size = args[0].get('x_size', None)
-        y_size = args[0].get('y_size', None)
-        use_disc_caching = args[0].get('use_disc_caching', False)
+
+        if not args:
+            args = {}
+        else:
+            args = args[0]
+
+        self._filename = args.get('file', None)
+        self._wkt = args.get('wkt', None)
+        self.dtype = args.get('dtype', _DEFAULT_DTYPE)
+        self.ndv = args.get('ndv', _DEFAULT_NA_VALUE)
+        self._x_size = args.get('x_size', None)
+        self._y_size = args.get('y_size', None)
+        
+        use_disc_caching = args.get('use_disc_caching', False)
 
         if use_disc_caching is not None:
             self._use_disc_caching = str(randint(1, 9E09)) + \
@@ -394,8 +401,13 @@ class Gdal(object):
         """
         # grab raster meta information from GeoRasters
         try:
-            self._ndv, self._x_size, self._y_size, self._geot, self._projection, self._dtype = \
+            _ndv, _x_size, _y_size, self._geot, self._projection, _dtype = \
                 get_geo_info(self._filename)
+            # if the user explicitly set raster options, honor them
+            self._ndv = _ndv if self._ndv is None else self._ndv
+            self._x_size = _x_size if self._x_size is None else self._x_size
+            self._y_size = _y_size if self._y_size is None else self._y_size
+            self._dtype = _dtype if self._dtype is None else self._dtype
         except Exception:
             raise AttributeError("problem processing file input -- is this"
                 " a raster file?")
