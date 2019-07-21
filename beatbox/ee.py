@@ -14,6 +14,21 @@ except Exception:
                    "Check your installation. Will continue "
                    "to load but without the EE functionality.")
 
+from gee_asset_manager.batch_remover import delete
+from gee_asset_manager.batch_uploader import upload
+from gee_asset_manager.config import setup_logging
+
+def ee_ingest(*args, **kwargs:
+    """punt"""
+    upload(user=kwargs.user,
+           source_path=kwargs.get('filename',None),
+           destination_path=kwargs.get('asset_id', None),
+            metadata_path=None,
+            multipart_upload=None,
+            nodata_value=None,
+            bucket_name=None,
+            band_names=None)
+
 class EeAsset(object):
     pass
 
