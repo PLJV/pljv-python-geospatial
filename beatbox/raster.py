@@ -455,12 +455,15 @@ class Raster(object):
             args = {}
         else:
           args = args[0]
+
         input = args.get('input', None)
         port = args.get('port', None)
         username = args.get('username', None)
         password = args.get('password', None)
         
-        self._builder({'input':input, 'port':port, 'username':username, 'password':password})
+        # allow for an empty specification by user
+        if input:
+            self._builder({'input':input, 'port':port, 'username':username, 'password':password})
 
     def _builder(self, config):
         if os.path.exists(config['input']):
