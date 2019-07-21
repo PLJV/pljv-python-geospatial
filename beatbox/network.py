@@ -2,25 +2,25 @@ import json
 
 class PostGis(object):
     def __init__(self, json_conf, table_name, host, port, username, password, *args):
-        if args is None:
+        if not args:
             args = {}
-        json_conf = args[0].get('json_conf', None)
-        table_name = args[0].get('table_name', None)
+        json_conf = args.get('json_conf', None)
+        table_name = args.get('table_name', None)
         # if we were passed a json file input and 
         # the settings weren't specified by user 
         # explicitly, fill-them in here
         if json_conf is not None:
             with open(json_conf) as file:
                 json_conf = json.loads(file)
-                self.host = args[0].get('host', json_conf.get('host', None))
-                self.port = args[0].get('port', json_conf.get('port', None))
-                self.username =args[0].get('username', json_conf.get('username', None)) 
-                self.password = args[0].get('password', json_conf.get('password', None))
+                self.host = args.get('host', json_conf.get('host', None))
+                self.port = args.get('port', json_conf.get('port', None))
+                self.username =args.get('username', json_conf.get('username', None)) 
+                self.password = args.get('password', json_conf.get('password', None))
         else:
-            host = args[0].get('host', None)
-            port = args[0].get('port', None)
-            username = args[0].get('username', None)
-            password = args[0].get('password', None)
+            host = args.get('host', None)
+            port = args.get('port', None)
+            username = args.get('username', None)
+            password = args.get('password', None)
     def to_wkt(self):
         raise NotImplementedError
 
@@ -29,15 +29,15 @@ class QsCredentials(object):
     QuickStats Credentials
     """
     def __init__(self, json_conf, api_key, *args):
-        if args is None:
+        if not args:
             args = {}
-        json_conf = args[0].get('json_conf', None)
+        json_conf = args.get('json_conf', None)
         if json_conf is not None:
             with open(json_conf) as file:
                 json_conf = json.loads(file)
-                self.api_key = args[0].get('api_key', json_conf.get('api_key', None))
+                self.api_key = args.get('api_key', json_conf.get('api_key', None))
         else:
-            api_key = args[0].get('api_key', None)
+            api_key = args.get('api_key', None)
 
 
 class QuickStats(object):

@@ -362,7 +362,7 @@ def _is_wkt_str(wkt, *args):
     :return: Returns true if the wkt str appear valid
     :rtype: Boolean
     """
-    if args is None:
+    if not args:
         args = {}
     wkt = args[0].get('wkt', None)
 
@@ -391,9 +391,9 @@ class Gdal(object):
             self._use_disc_caching = str(randint(1, 9E09)) + \
                                        '_np_array.dat'
 
-        self.open_file()
+        self.open()
         
-    def open_file(self):
+    def open(self):
         """
         Read a raster file from disc as a formatted numpy array
         :rval none:
@@ -435,6 +435,7 @@ class Gdal(object):
         connection = PostGis(args[0]).to_wkt
         raise NotImplementedError
 
+
 class Raster(object):
     """ Raster class is a wrapper for generating GeoRasters,
     Numpy arrays, and Earth Engine Image objects. It opens files
@@ -445,8 +446,7 @@ class Raster(object):
     :return None
     """
 
-    def __init__(self, filename=None, array=None, dtype=None,
-                 disc_caching=None):
+    def __init__(self,*args):
         self._backend = "local"
         self._array = None
         self._filename = None
@@ -458,22 +458,22 @@ class Raster(object):
         self.geot = None                 # geographic transformation
         self.projection = None           # geographic projection
         self.dtype = None
-        # args[0]/filename=
-        self.filename = filename
-        # args[1]/array=
-        self.array = array
-        # args[2]/dtype=
-        if dtype is not None:
-            self.dtype = dtype
-        # args[3]/disc_cache=
-        if disc_caching is not None:
+
+        if not args:
+            args = {}
+        self.dtype = args.get('dtype', None)
+        self.filename = args.get('filename', None)
+        self.array = args.get('array', None)
+        self._use_disc_caching = args.get('disc_caching', None)
+
+        if self._use_disc_caching is not None:
             self._use_disc_caching = str(randint(1, 9E09)) + \
                                        '_np_binary_array.dat'
         # if we were passed a file argument, assume it's a
         # path and try to open it
         if self.filename is not None:
             try:
-                self.open_file(self.filename)
+                self.open(self.filename)
             except OSError:
                 raise OSError("couldn't open the filename provided")
 
@@ -533,14 +533,13 @@ class Raster(object):
     def backend(self, *args):
         self._backend = args[0]
 
-    def open_file(self, file, dtype, *args):
+    def open(self, file, dtype, *args):
         """ Open a local file handle for reading and assignment
         :param file:
         :return: None
         """
-        if args is None:
+        if not args:
             args = {}
-
         file = args[0].get('file', None)
         dtype = args[0].get('dtype', _DEFAULT_DTYPE)
         
@@ -661,15 +660,17 @@ def _to_numpy_type(user_str=None):
     return None
 
 class RasterReimplementation(object):
-    def __init__(self, input, host, port, username, password, *args):
+    def __init__(self,*args):
         self.array = []
         self.crs = []
         self.crs_wkt = []
 
-        input = args[0].get('input', None)
-        port = args[0].get('port', None)
-        username = args[0].get('username', None)
-        password = args[0].get('password', None)
+        if not args:
+            args = {}
+        input = args.get('input', None)
+        port = args.get('port', None)
+        username = args.get('username', None)
+        password = args.get('password', None)
         
         self._builder({'input':input, 'port':port, 'username':username, 'password':password})
 

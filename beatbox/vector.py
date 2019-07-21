@@ -94,9 +94,9 @@ class Geometries(object):
     :return: None
     """
     def __init__(self, geometries, *args):        
-        if args is None:
+        if not args:
             args = {}        
-        self.geometries = args[0].get('geometries',[])
+        self.geometries = args.get('geometries',[])
     
     @property
     def geometries(self):
@@ -120,7 +120,7 @@ class Attributes(object):
         
         self._attributes = {}
         
-        if args is None:
+        if not args:
             args = {}
         self.attributes = args.get('shape_collection', None)
 
@@ -158,10 +158,10 @@ class Vector(object):
         self.crs = []
         self.crs_wkt = []
         
-        if args is None:
+        if not args:
             args = {}
         
-        input = args[0].get('input', None)
+        input = args.get('input', None)
 
         # specification for class methods
         if input is None:
@@ -251,10 +251,10 @@ class Vector(object):
 
         :return: An appropriate derived vector object
         """
-        filename = args[0].get('filename', None)
-        json = args[0].get('json', None)
-        layer = args[0].get('layer', None)
-        driver = args[0].get('driver', 'GPKG')
+        filename = args.get('filename', None)
+        json = args.get('json', None)
+        layer = args.get('layer', None)
+        driver = args.get('driver', 'GPKG')
 
         # args[0] / -filename
         if self._is_file(filename):
@@ -320,9 +320,9 @@ class Fiona(object):
         
         self.filename = []
         
-        input = args[0].get('input', None)
-        layer = args[0].get('layer', None)
-        driver = args[0].get('driver', 'ESRI Shapefile')
+        input = args.get('input', None)
+        layer = args.get('layer', None)
+        driver = args.get('driver', 'ESRI Shapefile')
 
         if input is not None:
             self.filename = input
@@ -374,11 +374,11 @@ class GeoJson(Fiona):
         :param args:
         :return:
         """
-        if args is None:
+        if not args:
             args = {}
-        filename = args[0].get('filename', None)
-        json =  args[0].get('json', None)
-        stringify = args[0].get('stringify', True)
+        filename = args.get('filename', None)
+        json =  args.get('json', None)
+        stringify = args.get('stringify', True)
         # build a target dictionary
         feature_collection = {
             "type": "FeatureCollection",

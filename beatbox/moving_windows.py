@@ -47,18 +47,18 @@ def ndimage_filter(image, filename, write, footprint, overwrite, function, size,
     apply a common rcular buffer, and optionally writes a numpy array to
     disk following user specifications
     """
-    if args is None:
+    if not args:
         args = {}
 
-    image = args[0].get('image', None)
-    filename = args[0].get('filename', None)
-    write = args[0].get('write', _DEFAULT_WRITE_ACTION)
-    footprint = args[0].get('footprint', None)
-    overwrite = args[0].get('overwrite', _DEFAULT_OVERWRITE_ACTION)
-    function = args[0].get('function', None)
-    size = args[0].get('size', None)
-    intermediate_dtype = args[0].get('intermediate_dtype', _DEFAULT_DTYPE),
-    dtype = args[0].get('dtype', _DEFAULT_DTYPE)
+    image = args.get('image', None)
+    filename = args.get('filename', None)
+    write = args.get('write', _DEFAULT_WRITE_ACTION)
+    footprint = args.get('footprint', None)
+    overwrite = args.get('overwrite', _DEFAULT_OVERWRITE_ACTION)
+    function = args.get('function', None)
+    size = args.get('size', None)
+    intermediate_dtype = args.get('intermediate_dtype', _DEFAULT_DTYPE),
+    dtype = args.get('dtype', _DEFAULT_DTYPE)
 
     # figure out if we are writing to disk
 
