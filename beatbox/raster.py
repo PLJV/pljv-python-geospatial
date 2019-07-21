@@ -41,7 +41,6 @@ from osgeo import gdal_array
 import types
 import psutil
 # beatbox
-from .do import _build_kwargs_from_args
 from .network import PostGis
 
 _DEFAULT_NA_VALUE = 65535
@@ -355,7 +354,7 @@ def _is_existing_file(*args):
     """
     raise NotImplementedError
 
-def _is_wkt_str(*args):
+def _is_wkt_str(wkt, *args):
     """
     Returns a boolean if a user-provided string can be parsed by GDAL as WKT
 
@@ -363,20 +362,15 @@ def _is_wkt_str(*args):
     :return: Returns true if the wkt str appear valid
     :rtype: Boolean
     """
-    # Default options
-    KNOWN_ARGS = ['wkt']
-    DEFAULTS = [None]
-
-    if len(args) > 0:
-        kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
-    else:
-        kwargs = _build_kwargs_from_args(kwargs, defaults=DEFAULTS, keys=KNOWN_ARGS)
+    if args is None:
+        args = {}
+    wkt = args[0].get('wkt', None)
 
     raise NotImplementedError
 
 
 class Gdal(object):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, file, wkt, use_disc_caching, dtype, ndv, x_size, y_size, *args):
         """
         Wrapper for gdal primatives to fetch raster data from a file 
         or SQL database through WKT strings
@@ -385,24 +379,15 @@ class Gdal(object):
         :param str wkt: A GDAL-formatted WKT string; e.g., that can be used to open rasters on a SQL server.
         :param bool use_disc_caching: Should we attempt to read our raster into RAM or should we cache it to disc? 
         """
-        # Define our known parameters and default properties
-        KNOWN_ARGS = ['file', 'wkt', 'use_disc_caching', 'dtype', 'ndv', 'x_size', 'y_size']
-        DEFAULTS = [None, None, False, None, _DEFAULT_NA_VALUE, None, None]
+        file = args[0].get('file', None)
+        wkt = args[0].get('wkt', None)
+        dtype = args[0].get('dtype', _DEFAULT_DTYPE)
+        ndv = args[0].get('ndv', _DEFAULT_NA_VALUE)
+        x_size = args[0].get('x_size', None)
+        y_size = args[0].get('y_size', None)
+        use_disc_caching = args[0].get('use_disc_caching', False)
 
-        if len(args) > 0:
-            kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
-        else:
-            kwargs = _build_kwargs_from_args(kwargs, defaults=DEFAULTS, keys=KNOWN_ARGS)
-   
-        self._filename = kwargs['file']
-        self._wkt_string = kwargs['wkt']
-        self._use_disc_caching = kwargs['use_disc_caching']
-        self._dtype = kwargs['dtype']
-        self._ndv = kwargs['ndv']
-        self._x_size = kwargs['x_size']
-        self._y_size = kwargs['y_size']
-
-        if self._use_disc_caching is not None:
+        if use_disc_caching is not None:
             self._use_disc_caching = str(randint(1, 9E09)) + \
                                        '_np_array.dat'
 
@@ -548,37 +533,31 @@ class Raster(object):
     def backend(self, *args):
         self._backend = args[0]
 
-    def open_file(self, *args, **kwargs):
+    def open_file(self, file, dtype, *args):
         """ Open a local file handle for reading and assignment
         :param file:
         :return: None
         """
-        # argument handlers
-        KNOWN_ARGS = ['file', 'dtype']
-        DEFAULTS = [self.filename, self.dtype]
-        if len(args) > 0:
-            kwargs = _build_kwargs_from_args(args, 
-                defaults=DEFAULTS, keys=KNOWN_ARGS)
-        else:
-            kwargs = _build_kwargs_from_args(kwargs, 
-                defaults=DEFAULTS, keys=KNOWN_ARGS)
-        # args[0]/file=
-        kwargs['file'] = kwargs.get('file', None)
-        if kwargs['file'] is None:
+        if args is None:
+            args = {}
+
+        file = args[0].get('file', None)
+        dtype = args[0].get('dtype', _DEFAULT_DTYPE)
+        
+        if file is None:
             raise IndexError("invalid file= data")
-        # args[1]/dtype=
-        kwargs['dtype'] = kwargs.get('dtype', None)
+
         # grab raster meta information from GeoRasters
         try:
             self.ndv, self._xsize, self._ysize, self.geot, self.projection, _dtype = \
-                get_geo_info(kwargs['file'])
+                get_geo_info(file)
         except Exception:
             raise AttributeError("problem processing file input -- is this"
                 " a raster file?")
         # args[1]/dtype=
-        if kwargs['dtype'] is None:
+        if dtype is None:
             # if the user didn't specify a type, just assume
-            # the 
+            # the default 
             self.dtype = _dtype
         # re-cast our datatype as a numpy type, if needed
         if type(self.dtype) == str:
@@ -682,23 +661,20 @@ def _to_numpy_type(user_str=None):
     return None
 
 class RasterReimplementation(object):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, input, host, port, username, password, *args):
         self.array = []
         self.crs = []
         self.crs_wkt = []
-        # argument handlers
-        KNOWN_ARGS = ['input','host','port', 'username', 'password']
-        DEFAULTS = [None, None, None, None, None]
 
-        if len(args) > 0:
-            kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
-        else:
-            kwargs = _build_kwargs_from_args(kwargs, defaults=DEFAULTS, keys=KNOWN_ARGS)
+        input = args[0].get('input', None)
+        port = args[0].get('port', None)
+        username = args[0].get('username', None)
+        password = args[0].get('password', None)
         
-        self._builder(**kwargs)
+        self._builder({'input':input, 'port':port, 'username':username, 'password':password})
 
-    def _builder(self, **kwargs):
-        if _is_existing_file(kwargs['input']):
-            return Gdal(file=kwargs['input'])
-        elif _is_wkt_str(kwargs['input']):
-            return Gdal(wkt=kwargs['input'])
+    def _builder(self, *args):
+        if _is_existing_file(args[0]['input']):
+            return Gdal(file=args[0]['input'])
+        elif _is_wkt_str(args[0]['input']):
+            return Gdal(wkt=args[0]['input'])

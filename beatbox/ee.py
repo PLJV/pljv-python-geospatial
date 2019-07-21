@@ -18,7 +18,7 @@ from gee_asset_manager.batch_remover import delete
 from gee_asset_manager.batch_uploader import upload
 from gee_asset_manager.config import setup_logging
 
-def ee_ingest(*args, **kwargs:
+def ee_ingest(*args, **kwargs):
     """punt"""
     upload(user=kwargs.user,
            source_path=kwargs.get('filename',None),

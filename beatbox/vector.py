@@ -23,7 +23,6 @@ import pyproj
 
 from shapely.geometry import shape
 
-from .do import Local, EE, Do, _build_kwargs_from_args
 from .network import PostGis
 
 import logging
@@ -94,21 +93,10 @@ class Geometries(object):
     :param geometries:
     :return: None
     """
-    def __init__(self, *args, **kwargs):
-        
-        self._geometries = []
-
-        # argument handlers
-        KNOWN_ARGS = ['geometries']
-        DEFAULTS = [None]
-        if len(args) > 0:
-            kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
-        else:
-            kwargs = _build_kwargs_from_args(kwargs, defaults=DEFAULTS, keys=KNOWN_ARGS)
-        if kwargs['geometries']:
-            self.geometries = kwargs['geometries']
-        else:
-            pass # allow empty specification
+    def __init__(self, geometries, *args):        
+        if args is None:
+            args = {}        
+        self.geometries = args[0].get('geometries',[])
     
     @property
     def geometries(self):
@@ -128,21 +116,13 @@ class EeGeometries(Geometries):
 
 
 class Attributes(object):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, shape_collection, *args):        
         
         self._attributes = {}
-
-        # argument handlers
-        KNOWN_ARGS = ['shape_collection']
-        DEFAULTS = [None]
-        if len(args) > 0:
-            kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
-        else:
-            kwargs = _build_kwargs_from_args(kwargs, defaults=DEFAULTS, keys=KNOWN_ARGS)
-        if kwargs['shape_collection']:
-            self.attributes = kwargs['shape_collection']
-        else:
-            pass # allow empty specification
+        
+        if args is None:
+            args = {}
+        self.attributes = args.get('shape_collection', None)
 
     @property
     def attributes(self):
@@ -161,7 +141,7 @@ class EeAttributes(Attributes):
     pass
 
 class Vector(object):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, input, *args):
         """Builder class that handles file input/output operations for shapefiles using fiona and shapely 
            built-ins and performs select spatial modifications on vector datasets
 
@@ -177,26 +157,25 @@ class Vector(object):
         self.schema = []
         self.crs = []
         self.crs_wkt = []
-        # argument handlers
-        KNOWN_ARGS = ['input']
-        DEFAULTS = [None]
-        if len(args) > 0:
-            kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
-        else:
-            kwargs = _build_kwargs_from_args(kwargs, defaults=DEFAULTS, keys=KNOWN_ARGS)
+        
+        if args is None:
+            args = {}
+        
+        input = args[0].get('input', None)
+
         # specification for class methods
-        if kwargs['input'] is None:
+        if input is None:
             # allow an empty specification
             pass
-        elif self._is_file(kwargs['input']):
-            logger.debug("Accepting user-input as file and attempting read: %s", kwargs['input'])
-            _features = self._builder(filename=kwargs['input'])
-        elif self._is_json_string(kwargs['input']):
-            logger.debug("Accepting user-input as json string and attempting read: %s", kwargs['input'])
-            _features =  self._builder(json=kwargs['input'])
-        elif isinstance(kwargs['input'], gp):
-            logger.debug("Accepting user-input as geopandas and attempting read: %s", kwargs['input'])
-            _features =  self._builder(json=kwargs['input'].to_json())
+        elif self._is_file(input):
+            logger.debug("Accepting user-input as file and attempting read: %s", input)
+            _features = self._builder(filename=input)
+        elif self._is_json_string(input):
+            logger.debug("Accepting user-input as json string and attempting read: %s", input)
+            _features =  self._builder(json=input)
+        elif isinstance(input, gp):
+            logger.debug("Accepting user-input as geopandas and attempting read: %s", input)
+            _features =  self._builder(json=input.to_json())
         else:
             logger.exception("Unhandled input provided to Vector()")
             raise ValueError()
@@ -259,7 +238,7 @@ class Vector(object):
     def _is_postgis(self, string=None):
         raise NotImplementedError
 
-    def _builder(self, *args, **kwargs):
+    def _builder(self, filename, json, layer, driver,*args):
         """
         Accepts a GeoJSON string or string path to a file that is used to 
         build an appropriate child. The derived class is returned to the user.
@@ -272,27 +251,25 @@ class Vector(object):
 
         :return: An appropriate derived vector object
         """
-        # argument handlers
-        KNOWN_ARGS = ['filename','json','layer','driver']
-        DEFAULTS = [None,None,None,'GPKG']
-        if len(args) > 0:
-            kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
-        else:
-            kwargs = _build_kwargs_from_args(kwargs, defaults=DEFAULTS, keys=KNOWN_ARGS)
+        filename = args[0].get('filename', None)
+        json = args[0].get('json', None)
+        layer = args[0].get('layer', None)
+        driver = args[0].get('driver', 'GPKG')
+
         # args[0] / -filename
-        if self._is_file(kwargs['filename']):
-            if self._is_geojson_file(kwargs['filename']):
-                return GeoJson(filename=kwargs['filename'])
-            elif self._is_shapefile(kwargs['filename']):
-                return Shapefile(kwargs['filename'])
-            elif self._is_geopackage(kwargs['filename']):
-                return GeoPackage(kwargs['filename'], kwargs['layer'], kwargs['driver'])
-            elif self._is_postgis(kwargs['filename']):
-                return PostGis(kwargs['filename'], kwargs['dsn'])
+        if self._is_file(filename):
+            if self._is_geojson_file(filename):
+                return GeoJson(filename=filename)
+            elif self._is_shapefile(filename):
+                return Shapefile(filename)
+            elif self._is_geopackage(filename):
+                return GeoPackage(filename, layer, driver)
+            elif self._is_postgis(filename):
+                return PostGis(filename, dsn)
             else:
                 raise FileNotFoundError("Couldn't process the provided filename as vector data")
-        if self._is_json_string(kwargs['json']):
-            return GeoJson(json_string=kwargs['json'])
+        if self._is_json_string(json):
+            return GeoJson(json_string=json)
         else:
             raise ValueError("Couldn't handle input data provided by user -- is this a valid JSON string or filename?")
 
@@ -339,19 +316,17 @@ class Vector(object):
 
 
 class Fiona(object):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, input, layer, driver, *args):
+        
         self.filename = []
-        # argument handlers
-        KNOWN_ARGS = ['input', 'layer', 'driver']
-        DEFAULTS = [None, None, 'ESRI Shapefile']
-        if args[0]:
-            kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
-        else:
-            kwargs = _build_kwargs_from_args(args)
-        # by default, process this as a file and parse out or data using Fiona
-        if kwargs['input'] is not None:
-            self.filename = kwargs['input']
-            _shape_collection = fiona.open(kwargs['input'], layer=kwargs['layer'], driver=kwargs['driver'])
+        
+        input = args[0].get('input', None)
+        layer = args[0].get('layer', None)
+        driver = args[0].get('driver', 'ESRI Shapefile')
+
+        if input is not None:
+            self.filename = input
+            _shape_collection = fiona.open(input, layer=layer, driver=driver)
         else:
             raise ValueError("input= argument cannot be 'None'")
         # assign our class private members from whatever was read
@@ -363,7 +338,7 @@ class Fiona(object):
         self.geometries = Geometries(_shape_collection).geometries
         self.attributes = Attributes(_shape_collection).attributes
 
-    def write(self, filename=None, type='ESRI Shapefile'):
+    def write(self, filename, type):
         """ wrapper for fiona.open that will write in-class geometry data to disk
 
         (Optional) Keyword arguments:
@@ -394,18 +369,16 @@ class Shapefile(Fiona):
 
 
 class GeoJson(Fiona):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, filename, json, stringify, *args):
         """
         :param args:
         :return:
         """
-        # argument handlers
-        KNOWN_ARGS = ['filename', 'json', 'stringify']
-        DEFAULTS = [None, None, True]
-        if args[0]:
-            kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
-        else:
-            kwargs = _build_kwargs_from_args(args)
+        if args is None:
+            args = {}
+        filename = args[0].get('filename', None)
+        json =  args[0].get('json', None)
+        stringify = args[0].get('stringify', True)
         # build a target dictionary
         feature_collection = {
             "type": "FeatureCollection",
@@ -413,11 +386,11 @@ class GeoJson(Fiona):
             "crs": [],
             "properties": []
         }
-        if kwargs['filename']:
-            super().__init__(input=kwargs['filename'])
-        elif kwargs['json']:
+        if filename is not None:
+            super().__init__(input=filename)
+        elif json is not None:
             super().__init__()
-            self.geometries = Geometries(kwargs['json']).geometries
+            self.geometries = Geometries(json).geometries
             self.attributes = Attributes(self.geometries).attributes
             logger.debug("warning: review attribute table from input json object")
         else:
@@ -444,7 +417,7 @@ class GeoJson(Fiona):
                 self.attributes.loc[i].to_json()
             )
         # do we want this stringified?
-        if kwargs['stringify']:
+        if stringify:
             feature_collection = json.dumps(feature_collection)
 
     def read(self):

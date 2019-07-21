@@ -15,7 +15,6 @@ import numpy as np
 import logging
 
 from .raster import Raster
-from .do import _build_kwargs_from_args
 
 from scipy import ndimage
 
@@ -39,93 +38,92 @@ def gen_circular_array(nPixels=None, dtype=np.bool):
         kernel = (radius <= nPixels).astype(dtype)
     return kernel
 
-def _dict_to_mwindow_filename(key=None, window_size=None):
+def _dict_to_mwindow_filename(key, window_size):
     """ quick kludging to generate a filename from key + window size """
     return str(key)+"_"+str(window_size)+"x"+str(window_size)
 
-def ndimage_filter(*args, **kwargs):
+def ndimage_filter(image, filename, write, footprint, overwrite, function, size, intermediate_dtype, dtype,*args):
     """ wrapper for ndimage filters that can comprehend a GeoRaster,
     apply a common rcular buffer, and optionally writes a numpy array to
     disk following user specifications
     """
-    KNOWN_ARGS = ['image', 'filename', 'write', 'footprint', 'overwrite', 
-                  'function', 'size', 'intermediate_dtype', 'dtype']
-    DEFAULTS = [None, None, _DEFAULT_WRITE_ACTION, None, 
-        _DEFAULT_OVERWRITE_ACTION, None, None, _DEFAULT_DTYPE, 
-        _DEFAULT_DTYPE]
-    if len(args) > 0:
-        if type(args[0]) == dict:
-            kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
-        else:
-            kwargs = _build_kwargs_from_args(args, defaults=DEFAULTS, keys=KNOWN_ARGS)
+    if args is None:
+        args = {}
+
+    image = args[0].get('image', None)
+    filename = args[0].get('filename', None)
+    write = args[0].get('write', _DEFAULT_WRITE_ACTION)
+    footprint = args[0].get('footprint', None)
+    overwrite = args[0].get('overwrite', _DEFAULT_OVERWRITE_ACTION)
+    function = args[0].get('function', None)
+    size = args[0].get('size', None)
+    intermediate_dtype = args[0].get('intermediate_dtype', _DEFAULT_DTYPE),
+    dtype = args[0].get('dtype', _DEFAULT_DTYPE)
 
     # figure out if we are writing to disk
 
     try:
-        if 'filename' not in kwargs.keys():
-            kwargs['filename'] = None
-            kwargs['write'] = False
+        if filename is None:
+            write = False
         else:
-            kwargs['write'] = not os.path.isfile(kwargs['filename']) | kwargs['overwrite'] & kwargs['write']
-            logger.debug("Will attempt to write raster file to dir: %s as %s", os.getcwd(), kwargs['filename'])
+            write = not os.path.isfile(filename) | overwrite & write
+            logger.debug("Will attempt to write raster file to dir: %s as %s", os.getcwd(), filename)
     except TypeError as e:
         logger.debug("Encountered an issue specifying a write file -- "
             "filter will return result to user : %s", e)
-        kwargs['write'] = False
+        write = False
     
     try:
-        kwargs['xsize'] = kwargs['image']._xsize
-        kwargs['ysize'] = kwargs['image']._ysize
+        _xsize = image._xsize
+        _ysize = image._ysize
     except AttributeError:
         logger.debug("We were passed a numpy array without any cell sizes... "
             "disabling write calls and returning result to user.")
-        kwargs['write'] = False
+        write = False
 
     # format our Raster object as a numpy array
     
-    if kwargs['size']:
-        kwargs['footprint'] = gen_circular_array(kwargs['size'], dtype=_DEFAULT_FOOTPRINT_DTYPE)
+    if size:
+        footprint = gen_circular_array(size, dtype=dtype)
     try:
         # re-cast our user-provided, masked array with a zero fill-value
-        kwargs['image'].array = np.ma.masked_array(
-            kwargs['image'].array,
+        image.array = np.ma.masked_array(
+            image.array,
             fill_value=0,
-            dtype=kwargs['intermediate_dtype'])
+            dtype=intermediate_dtype)
         # and fill the numpy array with actual zeros before doing a moving windows analysis
-        kwargs['image'] = np.ma.filled(
-            kwargs['image'].array,
+        image = np.ma.filled(
+            image.array,
             fill_value=0)
     except AttributeError as e:
         # otherwise, assume the user already supplied a properly formatted np.array
         pass
     
-    logger.debug("Ndimage filter() run-time parameters : \n%s\n", str(kwargs))
-    
     # apply ndimage filter to user specifications
     # these can be used for the most common functions
     # we may encounter for moving windows analyses
 
-    kwargs['image'] = ndimage.generic_filter(
-        input=kwargs['image'],
-        function=kwargs['function'],
-        footprint=kwargs['footprint'])
+    image = ndimage.generic_filter(
+        input=image,
+        function=function,
+        footprint=footprint)
 
-    logger.debug("Filter result : \n\n%s\n", kwargs['image'])
-    logger.debug("Cumulative sum : %s", kwargs['image'].cumsum())
+    logger.debug("Filter result : \n\n%s\n", image)
+    logger.debug("Cumulative sum : %s", image.cumsum())
     
     # either save to disk or return to user
-    if kwargs['write']:
-        outfile = Raster(array = np.array(kwargs['image']))
-        outfile._xsize = kwargs['xsize']
-        outfile._ysize = kwargs['ysize']
-        outfile.filename = kwargs['filename']
+    if write:
+        outfile = Raster(array = np.array(image))
+        outfile._xsize = _xsize
+        outfile._ysize = _ysize
+        outfile.filename = filename
         try:
             outfile.write()
         except AttributeError as e:
-            outfile.write(filename=kwargs['filename'])
+            outfile.write(filename=filename)
         except Exception as e:
             logger.debug("%s doesn't appear to be a Raster object; "
                            "returning result to user", e)
-            return kwargs['image']
+            return image
     else:
-        return kwargs['image']
+        return image
