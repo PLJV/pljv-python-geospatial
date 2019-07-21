@@ -95,7 +95,9 @@ class Geometries(object):
     """
     def __init__(self, geometries, *args):        
         if not args:
-            args = {}        
+            args = {}
+        else:
+          args = args[0]        
         self.geometries = args.get('geometries',[])
     
     @property
@@ -122,6 +124,8 @@ class Attributes(object):
         
         if not args:
             args = {}
+        else:
+          args = args[0]
         self.attributes = args.get('shape_collection', None)
 
     @property
@@ -160,6 +164,8 @@ class Vector(object):
         
         if not args:
             args = {}
+        else:
+          args = args[0]
         
         input = args.get('input', None)
 
@@ -369,13 +375,16 @@ class Shapefile(Fiona):
 
 
 class GeoJson(Fiona):
-    def __init__(self, filename, json, stringify, *args):
+    def __init__(self, *args):
         """
         :param args:
         :return:
         """
         if not args:
             args = {}
+        else:
+          args = args[0]
+
         filename = args.get('filename', None)
         json =  args.get('json', None)
         stringify = args.get('stringify', True)

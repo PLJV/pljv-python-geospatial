@@ -429,7 +429,7 @@ class Gdal(object):
         connection = PostGis(args[0]).to_wkt
         raise NotImplementedError
 
-def _to_numpy_type(user_str=None):
+def _to_numpy_type(user_str):
     """
     Parse our NUMPY_STR dictionary using regular expressions
     for our user-specified function string.
@@ -453,6 +453,8 @@ class Raster(object):
 
         if not args:
             args = {}
+        else:
+          args = args[0]
         input = args.get('input', None)
         port = args.get('port', None)
         username = args.get('username', None)

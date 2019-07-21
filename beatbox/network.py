@@ -1,9 +1,11 @@
 import json
 
 class PostGis(object):
-    def __init__(self, json_conf, table_name, host, port, username, password, *args):
+    def __init__(self,*args):
         if not args:
             args = {}
+        else:
+          args = args[0]
         json_conf = args.get('json_conf', None)
         table_name = args.get('table_name', None)
         # if we were passed a json file input and 
@@ -31,6 +33,8 @@ class QsCredentials(object):
     def __init__(self, json_conf, api_key, *args):
         if not args:
             args = {}
+        else:
+          args = args[0]
         json_conf = args.get('json_conf', None)
         if json_conf is not None:
             with open(json_conf) as file:
