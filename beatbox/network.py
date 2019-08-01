@@ -1,13 +1,11 @@
 import json
 
 class PostGis(object):
-    def __init__(self,*args):
+    def __init__(self,json_conf=None, table_name=None, *args):
         if not args:
             args = {}
         else:
           args = args[0]
-        json_conf = args.get('json_conf', None)
-        table_name = args.get('table_name', None)
         # if we were passed a json file input and 
         # the settings weren't specified by user 
         # explicitly, fill-them in here
@@ -19,10 +17,10 @@ class PostGis(object):
                 self.username =args.get('username', json_conf.get('username', None)) 
                 self.password = args.get('password', json_conf.get('password', None))
         else:
-            host = args.get('host', None)
-            port = args.get('port', None)
-            username = args.get('username', None)
-            password = args.get('password', None)
+            self.host = args.get('host', None)
+            self.port = args.get('port', None)
+            self.username = args.get('username', None)
+            self.password = args.get('password', None)
     def to_wkt(self):
         raise NotImplementedError
 

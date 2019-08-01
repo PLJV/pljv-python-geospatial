@@ -21,7 +21,7 @@ import psycopg2
 
 import pyproj
 
-from shapely.geometry import shape
+from shapely.geometry import shape, mapping
 
 from .network import PostGis
 
@@ -93,13 +93,10 @@ class Geometries(object):
     :param geometries:
     :return: None
     """
-    def __init__(self, geometries, *args):        
-        if not args:
-            args = {}
-        else:
-          args = args[0]        
-        self.geometries = args.get('geometries',[])
-    
+    def __init__(self, geometries=None):
+        if geometries is not None:
+            self.geometries = geometries
+
     @property
     def geometries(self):
         return self._geometries
@@ -118,16 +115,10 @@ class EeGeometries(Geometries):
 
 
 class Attributes(object):
-    def __init__(self, shape_collection, *args):        
-        
+    def __init__(self, shape_collection=None):
         self._attributes = {}
-        
-        if not args:
-            args = {}
-        else:
-          args = args[0]
-        self.attributes = args.get('shape_collection', None)
-
+        if shape_collection is not None:
+            self.attributes = shape_collection
     @property
     def attributes(self):
         return self._attributes
@@ -145,7 +136,7 @@ class EeAttributes(Attributes):
     pass
 
 class Vector(object):
-    def __init__(self, input, *args):
+    def __init__(self, input=None, *args):
         """Builder class that handles file input/output operations for shapefiles using fiona and shapely 
            built-ins and performs select spatial modifications on vector datasets
 
@@ -167,8 +158,6 @@ class Vector(object):
         else:
           args = args[0]
         
-        input = args.get('input', None)
-
         # specification for class methods
         if input is None:
             # allow an empty specification
@@ -244,7 +233,7 @@ class Vector(object):
     def _is_postgis(self, string=None):
         raise NotImplementedError
 
-    def _builder(self, filename, json, layer, driver,*args):
+    def _builder(self, filename=None, json=None, layer=None, dsn=None, driver='GPKG'):
         """
         Accepts a GeoJSON string or string path to a file that is used to 
         build an appropriate child. The derived class is returned to the user.
@@ -257,10 +246,6 @@ class Vector(object):
 
         :return: An appropriate derived vector object
         """
-        filename = args.get('filename', None)
-        json = args.get('json', None)
-        layer = args.get('layer', None)
-        driver = args.get('driver', 'GPKG')
 
         # args[0] / -filename
         if self._is_file(filename):
@@ -275,13 +260,13 @@ class Vector(object):
             else:
                 raise FileNotFoundError("Couldn't process the provided filename as vector data")
         if self._is_json_string(json):
-            return GeoJson(json_string=json)
+            return GeoJson(json=json)
         else:
             raise ValueError("Couldn't handle input data provided by user -- is this a valid JSON string or filename?")
 
     def to_geometries(self, geometries=None):
         """
-        Cast a list of features as a shapely geometries. 
+        Cast a list of features as shapely geometries. 
         :param geometries:
         :return: None
         """
@@ -306,15 +291,17 @@ class Vector(object):
             _gdf = gp.read_file(self.filename)
         return _gdf
 
-    def to_geopandas(self):
-        """
-        Shorthand to to_geodataframe()
-        :return:
-        """
-        return self.to_geodataframe()
-
-    def to_geojson(self, stringify=None):
-        return GeoJson()
+    def to_geojson(self, stringify=False):
+        # result = { }
+        # for i in range(len(self.geometries)):
+        #     result.update( { **dict(mapping(self.geometries[i])), **self.attributes[i:i+1].to_dict() } )
+        geometries = pd.DataFrame([ mapping(geom) for geom in self.geometries ])
+        geometries = pd.concat([geometries, self.attributes], axis=1).to_json()
+        if stringify:
+            return geometries
+        else:
+            return json.loads(geometries)
+        
 
     def to_ee_feature_collection(self):
         raise NotImplementedError
@@ -322,14 +309,10 @@ class Vector(object):
 
 
 class Fiona(object):
-    def __init__(self, input, layer, driver, *args):
+    def __init__(self, input=None, layer=None, driver='ESRI Shapefile'):
         
         self.filename = []
         
-        input = args.get('input', None)
-        layer = args.get('layer', None)
-        driver = args.get('driver', 'ESRI Shapefile')
-
         if input is not None:
             self.filename = input
             _shape_collection = fiona.open(input, layer=layer, driver=driver)
@@ -344,7 +327,7 @@ class Fiona(object):
         self.geometries = Geometries(_shape_collection).geometries
         self.attributes = Attributes(_shape_collection).attributes
 
-    def write(self, filename, type):
+    def write(self, filename=None, type=None):
         """ wrapper for fiona.open that will write in-class geometry data to disk
 
         (Optional) Keyword arguments:
@@ -375,7 +358,7 @@ class Shapefile(Fiona):
 
 
 class GeoJson(Fiona):
-    def __init__(self, *args):
+    def __init__(self, filename=None, json=None, vector=None, *args):
         """
         :param args:
         :return:
@@ -383,11 +366,10 @@ class GeoJson(Fiona):
         if not args:
             args = {}
         else:
-          args = args[0]
+            args = args[0]
 
-        filename = args.get('filename', None)
-        json =  args.get('json', None)
         stringify = args.get('stringify', True)
+
         # build a target dictionary
         feature_collection = {
             "type": "FeatureCollection",
@@ -402,6 +384,10 @@ class GeoJson(Fiona):
             self.geometries = Geometries(json).geometries
             self.attributes = Attributes(self.geometries).attributes
             logger.debug("warning: review attribute table from input json object")
+        elif vector is not None:
+            suiper().__init__()
+            self.geometries = vector.geometries
+            self.attributes = vector.attributes
         else:
             logger.debug('Unknown input passed to GeoJson constructor by user')
             raise ValueError

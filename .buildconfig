@@ -8,3 +8,4 @@ app-id=
 postbuild=
 prebuild=
 default=true
+toolchain=default

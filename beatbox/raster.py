@@ -348,7 +348,7 @@ def _is_number(num_list=None):
         return False
 
 
-def _is_wkt_str(wkt, *args):
+def _is_wkt_str(wkt=None, *args):
     """
     Returns a boolean if a user-provided string can be parsed by GDAL as WKT
 
@@ -356,15 +356,11 @@ def _is_wkt_str(wkt, *args):
     :return: Returns true if the wkt str appear valid
     :rtype: Boolean
     """
-    if not args:
-        args = {}
-    wkt = args[0].get('wkt', None)
-
     raise NotImplementedError
 
 
 class Gdal(object):
-    def __init__(self, *args):
+    def __init__(self, file=None, wkt=None, dtype=_DEFAULT_DTYPE, *args):
         """
         Wrapper for gdal primatives to fetch raster data from a file 
         or SQL database through WKT strings
@@ -373,15 +369,15 @@ class Gdal(object):
         :param str wkt: A GDAL-formatted WKT string; e.g., that can be used to open rasters on a SQL server.
         :param bool use_disc_caching: Should we attempt to read our raster into RAM or should we cache it to disc? 
         """
+        self._filename = file
+        self._wkt = wkt
+        self.dtype = dtype
 
         if not args:
             args = {}
         else:
             args = args[0]
 
-        self._filename = args.get('file', None)
-        self._wkt = args.get('wkt', None)
-        self.dtype = args.get('dtype', _DEFAULT_DTYPE)
         self.ndv = args.get('ndv', _DEFAULT_NA_VALUE)
         self._x_size = args.get('x_size', None)
         self._y_size = args.get('y_size', None)
@@ -458,7 +454,7 @@ def _to_numpy_type(user_str):
     return None
 
 class Raster(object):
-    def __init__(self,*args):
+    def __init__(self,input=None, port=None, *args):
         self.array = []
         self.crs = []
         self.crs_wkt = []
@@ -468,8 +464,6 @@ class Raster(object):
         else:
           args = args[0]
 
-        input = args.get('input', None)
-        port = args.get('port', None)
         username = args.get('username', None)
         password = args.get('password', None)
         
