@@ -286,21 +286,15 @@ class Vector(object):
             _gdf = _gdf.join(self.attributes)
         except Exception:
             logger.debug("failed to build a GeoDataFrame from shapely"
-                           "geometries -- will try to read from original"
-                           " source file instead")
-            _gdf = gp.read_file(self.filename)
+                           "geometries")
+            raise Exception()
         return _gdf
 
     def to_geojson(self, stringify=False):
-        # result = { }
-        # for i in range(len(self.geometries)):
-        #     result.update( { **dict(mapping(self.geometries[i])), **self.attributes[i:i+1].to_dict() } )
-        geometries = pd.DataFrame([ mapping(geom) for geom in self.geometries ])
-        geometries = pd.concat([geometries, self.attributes], axis=1).to_json()
         if stringify:
-            return geometries
+            return self.to_geodataframe().to_json()
         else:
-            return json.loads(geometries)
+            return json.loads(self.to_geodataframe().to_json())
         
 
     def to_ee_feature_collection(self):
