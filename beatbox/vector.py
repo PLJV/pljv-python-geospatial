@@ -175,7 +175,11 @@ class Vector(object):
             logger.exception("Unhandled input provided to Vector()")
             raise ValueError()
 
-        self.attributes, self.geometries, self.crs = _features.attributes, _features.geometries, _features.crs
+        self.attributes = _features.attributes
+        self.geometries =  _features.geometries
+        self.schema = _features.schema
+        self.crs = _features.crs
+        self.crs_wkt = _features.crs_wkt
 
     def __copy__(self):
         """ Simple copy method that creates a new instance of a vector class and assigns 
