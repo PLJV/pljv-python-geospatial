@@ -211,7 +211,8 @@ class Vector(object):
         return False
     
     def _is_geojson_file(self, path=None):
-        return magic.from_file(path).find('ASCII') >= 0
+        logger.debug("GeoJson magic result:"+ magic.from_file(path))
+        return magic.from_file(path).find('ASCII') or magic.from_file(path).find('JSON') >= 0
 
     def _is_json_string(self, string=None):
         """
@@ -291,10 +292,13 @@ class Vector(object):
         return _gdf
 
     def to_geojson(self, stringify=False):
-        if stringify:
-            return self.to_geodataframe().to_json()
-        else:
+        """
+        Wrapper for GeoDataFrame that will return our Vector geometries
+        and attributes formatted as GeoJSON
+        """
+        if not stringify:
             return json.loads(self.to_geodataframe().to_json())
+        return self.to_geodataframe().to_json()
         
 
     def to_ee_feature_collection(self):
@@ -306,6 +310,9 @@ class Fiona(object):
     def __init__(self, input=None, layer=None, driver='ESRI Shapefile'):
         
         self.filename = []
+        self.crs = None
+        self.crs_wkt = None
+        self.schema = None
         
         if input is not None:
             self.filename = input
@@ -352,62 +359,28 @@ class Shapefile(Fiona):
 
 
 class GeoJson(Fiona):
-    def __init__(self, filename=None, json=None, vector=None, *args):
+    def __init__(self, filename=None, json=None, *args):
         """
+        GeoJson extension for our Fiona interface that is typically used to 
+        read geojson files from a hard disk and build a vector object. 
         :param args:
         :return:
         """
-        if not args:
-            args = {}
-        else:
-            args = args[0]
 
-        stringify = args.get('stringify', True)
-
-        # build a target dictionary
-        feature_collection = {
-            "type": "FeatureCollection",
-            "features": [],
-            "crs": [],
-            "properties": []
-        }
         if filename is not None:
-            super().__init__(input=filename)
+            super().__init__(input=filename, driver='GeoJSON')
         elif json is not None:
             super().__init__()
             self.geometries = Geometries(json).geometries
             self.attributes = Attributes(self.geometries).attributes
-            logger.debug("warning: review attribute table from input json object")
-        elif vector is not None:
-            suiper().__init__()
-            self.geometries = vector.geometries
-            self.attributes = vector.attributes
+            try:
+                self.crs = json.loads(json)['crs']['properties']['name']
+            except Exception:
+                logger.debug('Failed to set CRS from input json string')
         else:
             logger.debug('Unknown input passed to GeoJson constructor by user')
             raise ValueError
-        # iterate over features in our shapely geometries
-        # and build-out our feature_collection
-        for feature in self.geometries:
-            if isinstance(feature, dict):
-                feature_collection["features"].append(feature)
-            else:
-                # assume that json will know what to do with it
-                # and raise an error if it doesn't
-                try:
-                    feature_collection["features"].append(json.loads(feature))
-                except Exception as e:
-                    raise e
-        # note the CRS
-        if self.crs:
-            feature_collection["crs"].append(self.crs)
-        # define our properties (attributes)
-        for i in self.attributes.index:
-            feature_collection['properties'].append(
-                self.attributes.loc[i].to_json()
-            )
-        # do we want this stringified?
-        if stringify:
-            feature_collection = json.dumps(feature_collection)
+
 
     def read(self):
         """Read JSON data from a file using fiona"""
