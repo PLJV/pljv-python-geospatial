@@ -164,22 +164,17 @@ class Vector(object):
             pass
         elif self._is_file(input):
             logger.debug("Accepting user-input as file and attempting read: %s", input)
-            _features = self._builder(filename=input)
+            self._builder(filename=input)
         elif self._is_json_string(input):
             logger.debug("Accepting user-input as json string and attempting read: %s", input)
-            _features =  self._builder(json=input)
+            self._builder(json=input)
         elif isinstance(input, gp):
             logger.debug("Accepting user-input as geopandas and attempting read: %s", input)
-            _features =  self._builder(json=input.to_json())
+            self._builder(json=input.to_json())
         else:
             logger.exception("Unhandled input provided to Vector()")
             raise ValueError()
 
-        self.attributes = _features.attributes
-        self.geometries =  _features.geometries
-        self.schema = _features.schema
-        self.crs = _features.crs
-        self.crs_wkt = _features.crs_wkt
 
     def __copy__(self):
         """ Simple copy method that creates a new instance of a vector class and assigns 
@@ -255,19 +250,25 @@ class Vector(object):
         # args[0] / -filename
         if self._is_file(filename):
             if self._is_geojson_file(filename):
-                return GeoJson(filename=filename)
+                _features = GeoJson(filename=filename)
             elif self._is_shapefile(filename):
-                return Shapefile(filename)
+                _features = Shapefile(filename)
             elif self._is_geopackage(filename):
-                return GeoPackage(filename, layer, driver)
+                _features = GeoPackage(filename, layer, driver)
             elif self._is_postgis(filename):
-                return PostGis(filename, dsn)
+                _features = PostGis(filename, dsn)
             else:
                 raise FileNotFoundError("Couldn't process the provided filename as vector data")
         if self._is_json_string(json):
-            return GeoJson(json=json)
+            _features = GeoJson(json=json)
         else:
             raise ValueError("Couldn't handle input data provided by user -- is this a valid JSON string or filename?")
+
+        self.attributes = _features.attributes
+        self.geometries =  _features.geometries
+        self.schema = _features.schema
+        self.crs = _features.crs
+        self.crs_wkt = _features.crs_wkt
 
     def to_geometries(self, geometries=None):
         """
