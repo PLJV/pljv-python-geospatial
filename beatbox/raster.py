@@ -207,8 +207,8 @@ class Gdal(object):
         :param str wkt: A GDAL-formatted WKT string; e.g., that can be used to open rasters on a SQL server.
         :param bool use_disc_caching: Should we attempt to read our raster into RAM or should we cache it to disc? 
         """
-        self._filename = file
-        self._wkt = wkt
+        self.filename = file
+        self.wkt = wkt
         self.dtype = dtype
 
         if not args:
@@ -217,8 +217,10 @@ class Gdal(object):
             args = args[0]
 
         self.ndv = args.get('ndv', _DEFAULT_NA_VALUE)
-        self._x_size = args.get('x_size', None)
-        self._y_size = args.get('y_size', None)
+        self.x_size = args.get('x_size', None)
+        self.y_size = args.get('y_size', None)
+        self.geot = args.get('geot', None)
+        self.projection = args.get('projection', None)
         
         use_disc_caching = args.get('use_disc_caching', False)
 
@@ -235,15 +237,15 @@ class Gdal(object):
         """
         # grab raster meta information from GeoRasters
         try:
-            _ndv, _x_size, _y_size, self._geot, self._projection, _dtype = \
-                get_geo_info(self._filename)
+            _ndv, _x_size, _y_size, self.geot, self.projection, _dtype = \
+                get_geo_info(self.filename)
             # if the user explicitly set raster options, honor them
-            self._ndv = _ndv if self._ndv is None else self._ndv
-            self._x_size = _x_size if self._x_size is None else self._x_size
-            self._y_size = _y_size if self._y_size is None else self._y_size
-            self._dtype = _dtype if self._dtype is None else self._dtype
+            self.ndv = _ndv if self.ndv is None else self.ndv
+            self.x_size = _x_size if self.x_size is None else self.x_size
+            self.y_size = _y_size if self.y_size is None else self.y_size
+            self.dtype = _dtype if self.dtype is None else self.dtype
         except Exception:
-            raise AttributeError("problem processing file input -- is this"
+            raise AttributeError("problem processing file input -- is this" +\
                 " a raster file?")
         # call gdal with explicit type specification
         # that will store in memory or as a disc cache, depending
@@ -251,24 +253,24 @@ class Gdal(object):
         if self._use_disc_caching is None:
             # create a cache file
             self.array = np.memmap(
-                filename=self._use_disc_caching, dtype=self._dtype, mode='w+',
-                shape = (self._y_size, self._x_size))
+                filename=self._use_disc_caching, dtype=self.dtype, mode='w+',
+                shape = (self.y_size, self.x_size))
             # load file contents into the cache
             self.array[:] = gdalnumeric.LoadFile(
-                filename=self._filename,
-                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(_to_numpy_type(self._dtype))
+                filename=self.filename,
+                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(_to_numpy_type(self.dtype))
             )[:]
         # by default, load the whole file into memory
         else:
             self.array = gdalnumeric.LoadFile(
-                filename=self._filename,
-                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(_to_numpy_type(self._dtype))
+                filename=self.filename,
+                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(_to_numpy_type(self.dtype))
             )
         # make sure we honor our no data value
         self.array = np.ma.masked_array(
             self.array,
-            mask=self.array == self._ndv,
-            fill_value=self._ndv
+            mask=self.array == self.ndv,
+            fill_value=self.ndv
         )
 
     def read_table(self, *args):
@@ -296,6 +298,7 @@ class Raster(object):
         self.array = []
         self.crs = []
         self.crs_wkt = []
+        self.geot = None
 
         if not args:
             args = {}
@@ -311,9 +314,15 @@ class Raster(object):
 
     def _builder(self, config):
         if os.path.exists(config['input']):
-            return Gdal(file=config['input'])
+            _raster = Gdal(file=config['input'])
         elif _is_wkt_str(config['input']):
-            return Gdal(wkt=config['input'])
+            _raster = Gdal(wkt=config['input'])
+
+        self.array = _raster.array
+        self.geot = _raster.geot
+        self.ndv = _raster.ndv
+        self.projection = _raster.projection
+        self.dtype = _raster.dtype
 
     def to_georaster(self):
         """ Parses internal Raster elements and returns as a clean GeoRaster
