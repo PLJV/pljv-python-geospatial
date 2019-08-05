@@ -23,7 +23,7 @@ __status__ = "Testing"
 
 # logging
 import logging
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.debug)
 logger = logging.getLogger(__name__)
 
 # mmap file caching and file handling
@@ -221,14 +221,17 @@ class Gdal(object):
         self.y_size = args.get('y_size', None)
         self.geot = args.get('geot', None)
         self.projection = args.get('projection', None)
-        
-        use_disc_caching = args.get('use_disc_caching', False)
+        self._use_disc_caching = args.get('use_disc_caching', None)
 
-        if use_disc_caching is not None:
+        if self._use_disc_caching is not None:
             self._use_disc_caching = str(randint(1, 9E09)) + \
                                        '_np_array.dat'
-
-        self.open()
+        # allow for an empty specification
+        if self.filename is not None:
+            self.open()
+        elif self.wkt is not None:
+            logger.debug("WKT string input is not supported yet")
+            raise NotImplementedError
         
     def open(self):
         """
@@ -240,17 +243,17 @@ class Gdal(object):
             _ndv, _x_size, _y_size, self.geot, self.projection, _dtype = \
                 get_geo_info(self.filename)
             # if the user explicitly set raster options, honor them
-            self.ndv = _ndv if self.ndv is None else self.ndv
+            self.ndv = _ndv if self.ndv is _DEFAULT_NA_VALUE else self.ndv
             self.x_size = _x_size if self.x_size is None else self.x_size
             self.y_size = _y_size if self.y_size is None else self.y_size
-            self.dtype = _dtype if self.dtype is None else self.dtype
+            self.dtype = _dtype if self.dtype is _DEFAULT_DTYPE else self.dtype
         except Exception:
             raise AttributeError("problem processing file input -- is this" +\
                 " a raster file?")
         # call gdal with explicit type specification
         # that will store in memory or as a disc cache, depending
         # on the state of our _use_disc_caching property
-        if self._use_disc_caching is None:
+        if self._use_disc_caching is not None:
             # create a cache file
             self.array = np.memmap(
                 filename=self._use_disc_caching, dtype=self.dtype, mode='w+',
