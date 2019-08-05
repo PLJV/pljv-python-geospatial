@@ -68,169 +68,7 @@ _NUMPY_TYPES = {
   "complex128": np.complex128
 }
 
-
-def crop(*args):
-    return _local_crop(args)
-
-def extract(*args):
-    """
-    Accept a series of 'with' arguments and uses an appropriate
-    backend to perform an extract operation with raster data
-    :param args:
-    :return:
-    """
-
-def binary_reclassify(array=None, match=None, *args):
-    """
-    Generalized version of binary_reclassify that can accomodate a local numpy 
-    array or processing on EE
-    :param args:
-    :return:
-    """
-    _backend = 'local'
-    # args[0]/array=
-    if array is None:
-        raise IndexError("invalid raster= argument provided by user")
-    # args[1]/match=
-    if match is None:
-        raise IndexError("invalid match= argument provided by user")
-    if not _is_number(match):
-        logger.warning("One or more values in your match array are "
-                       "not integers -- the reclass operation may produce "
-                       "unexpected results")
-    # process our array using the appropriate backend,
-    # currently only local operations are supported
-    if isinstance(array, Raster):
-        _backend = 'local'
-        array = array.to_georaster()
-    elif isinstance(array, GeoRaster):
-        _backend = 'local'
-    elif isinstance(array, np.array):
-        _backend = 'local'
-    else:
-        _backend = 'unknown'
-
-    if _backend == "local":
-        return _local_binary_reclassify(array, match)
-    else:
-        raise NotImplementedError("Currently only local binary "
-                                  "reclassification is supported")
-
-
-def _local_binary_reclassify(raster=None, match=None, invert=None,
-                             dtype=np.uint8):
-    """
-    Binary reclassification of input data. All cell values in
-    a numpy array are reclassified as uint8 (boolean) based on
-    whether they match or do not match the values of an input match
-    array.
-    :param obj raster: a Raster, GeoRaster, or related generator object
-    :param list match: a list object of integers specifying match values for reclassification
-    """
-    # args[0]/raster=
-    if raster is None:
-        raise IndexError("invalid raster= argument supplied by user")
-    # args[1]/match=
-    if match is None:
-        raise IndexError("invalid match= argument supplied by user")
-    # args[2]/invert=
-    if invert is None:
-        # this is an optional arg
-        invert = False
-    # if this is a Raster object, just drop
-    # raster down to a GeoRaster and pass on
-    if isinstance(raster, Raster):
-        raster = raster.to_georaster()
-    # if this is a complete GeoRaster, try
-    # to process the whole object
-    if isinstance(raster, GeoRaster):
-        raster = raster.raster
-        return np.reshape(
-            np.array(
-                np.in1d(raster, match, assume_unique=True, invert=invert),
-                dtype=dtype
-            ),
-            raster.shape
-        )
-    # if this is a big raster that we've split into chunks
-    # process this piece-wise
-    elif isinstance(raster, types.GeneratorType):
-        return np.concatenate(
-            [np.reshape(
-                np.array(
-                    np.in1d(d[0], match, assume_unique=True, invert=invert),
-                    dtype=dtype
-                ),
-                (1, d.shape[1])  # array shape tuple e.g., (1,1111)
-             )
-             for i, d in enumerate(raster)]
-        )
-    else:
-        raise ValueError("raster= input should be a Raster, GeoRaster, or"
-                         "Generator that numpy can work with")
-
-
-def _local_reclassify(*args):
-    raise NotImplementedError
-
-
-def _local_crop(raster=None, shape=None, *args):
-    """
-    Wrapper for georasters.clip that will preform a crop operation on
-    input raster
-    """
-    # args[0] / raster=
-    if raster is None:
-        raise IndexError("invalid raster= argument specified")
-    # args[1] / shape=
-    if shape is None:
-        raise IndexError("invalid shape=argument specified")
-    # sanity check and then do our crop operation
-    # and return to user
-    _enough_ram = _local_ram_sanity_check(raster.array)
-    if not _enough_ram['available'] and not raster._use_disc_caching:
-        logger.warning("There doesn't apprear to be enough free memory"
-                       " available for our raster operation. You should use"
-                       "disc caching options with your dataset. Est Megabytes "
-                       "needed: %s", -1 * _enough_ram['bytes'] * 1E-07)
-    return raster.to_georaster().clip(shape)
-
-
-
-def _local_clip(raster=None, shape=None):
-    """ 
-    Wrapper for a crop operation 
-    """
-    # args[0]/raster=
-    if raster is None:
-        raise IndexError("invalid raster= argument specified")
-    # args[1]/shape=
-    if shape is None:
-        raise IndexError("invalid shape= argument specified")
-    return _local_crop(raster=raster, shape=shape)
-
-def _local_extract(*args):
-    """ 
-    Local raster extraction handler
-    :param args:
-    :return:
-    """
-    pass
-
-def _local_reproject(*args):
-    pass
-
-
-def _local_merge(rasters=None):
-    """ 
-    Wrapper for georasters.merge that simplifies merging raster segments
-    returned by parallel operations.
-    """
-    if rasters is None:
-        raise IndexError("invalid raster= argument specified")
-    return merge(rasters)
-
-def _local_split(raster=None, n=None):
+def _split(raster=None, n=None):
     """ 
     Wrapper for np._array_split. Splits an input array into n (mostly)
     equal segments, possibly for a parallelized operation.
@@ -250,7 +88,7 @@ def _local_split(raster=None, n=None):
     )
 
 
-def _local_ram_sanity_check(array=None):
+def _ram_sanity_check(array=None):
     """
     Determine if there is enough ram for an operation and return 
     the amount of ram available (in bytes) as a dictionary 
@@ -317,7 +155,7 @@ def _est_array_size(obj=None, byte_size=None, dtype=None):
     return _array_len * _byte_size
 
 
-def _local_process_array_as_blocks(*args):
+def _process_blockwise(*args):
     """
     Accepts an array object and splits it into chunks that can be handled
     stepwise
@@ -476,7 +314,7 @@ class Raster(object):
             return Gdal(file=config['input'])
         elif _is_wkt_str(config['input']):
             return Gdal(wkt=config['input'])
-            
+
     def to_georaster(self):
         """ Parses internal Raster elements and returns as a clean GeoRaster
         object.
