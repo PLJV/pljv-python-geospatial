@@ -2,13 +2,18 @@
 
 __author__ = "Kyle Taylor"
 __copyright__ = "Copyright 2018, Playa Lakes Joint Venture"
-__credits__ = ["Kyle Taylor", "Alex Daniels", "Meghan Bogaerts", "Stephen Chang"]
+__credits__ = ["Kyle Taylor", "Alex Daniels",
+               "Meghan Bogaerts", "Stephen Chang"]
 __license__ = "GPL"
 __version__ = "3"
 __maintainer__ = "Kyle Taylor"
 __email__ = "kyle.taylor@pljv.org"
 __status__ = "Testing"
 
+# logging
+import logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 import os
 import fiona
@@ -18,19 +23,12 @@ import json
 import magic
 
 import psycopg2
-
 import pyproj
 
 from shapely.geometry import shape, mapping
-
 from .network import PostGis
 
-import logging
-
 _DEFAULT_EPSG = 4326
-
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
 
 def rebuild_crs(*args):
     """
@@ -93,6 +91,7 @@ class Geometries(object):
     :param geometries:
     :return: None
     """
+
     def __init__(self, geometries=None):
         if geometries is not None:
             self.geometries = geometries
@@ -106,7 +105,8 @@ class Geometries(object):
         try:
             self._geometries = [shape(ft['geometry']) for ft in list(args[0])]
         except AttributeError:
-            logger.debug("Failed to process shapely geometries from input: %s -- trying direct assignment.", args[0])
+            logger.debug(
+                "Failed to process shapely geometries from input: %s -- trying direct assignment.", args[0])
             self._geometries = args[0]
 
 
@@ -119,21 +119,26 @@ class Attributes(object):
         self._attributes = {}
         if shape_collection is not None:
             self.attributes = shape_collection
+
     @property
     def attributes(self):
         return self._attributes
-    
+
     @attributes.setter
     def attributes(self, *args):
         """Cast a shapely collection as a pandas dataframe"""
         try:
-            self._attributes = pd.DataFrame([ dict(item['properties']) for item in list(args[0]) ])
+            self._attributes = pd.DataFrame(
+                [dict(item['properties']) for item in list(args[0])])
         except AttributeError:
-            logger.debug("Failed to process attribute table as a pandas DataFrame: %s -- trying direct assignment.", args[0])
+            logger.debug(
+                "Failed to process attribute table as a pandas DataFrame: %s -- trying direct assignment.", args[0])
             self._attributes = args[0]
-            
+
+
 class EeAttributes(Attributes):
     pass
+
 
 class Vector(object):
     def __init__(self, input=None, *args):
@@ -152,12 +157,12 @@ class Vector(object):
         self.schema = []
         self.crs = []
         self.crs_wkt = []
-        
+
         if not args:
             args = {}
         else:
-          args = args[0]
-        
+            args = args[0]
+
         # specification for class methods
         if input is None:
             # allow an empty specification
@@ -166,15 +171,16 @@ class Vector(object):
             logger.debug("Accepting user-input as file and attempting read: %s", input)
             self._builder(filename=input)
         elif self._is_json_string(input):
-            logger.debug("Accepting user-input as json string and attempting read: %s", input)
+            logger.debug(
+                "Accepting user-input as json string and attempting read: %s", input)
             self._builder(json=input)
         elif isinstance(input, gp):
-            logger.debug("Accepting user-input as geopandas and attempting read: %s", input)
+            logger.debug(
+                "Accepting user-input as geopandas and attempting read: %s", input)
             self._builder(json=input.to_json())
         else:
             logger.exception("Unhandled input provided to Vector()")
             raise ValueError()
-
 
     def __copy__(self):
         """ Simple copy method that creates a new instance of a vector class and assigns 
@@ -203,15 +209,13 @@ class Vector(object):
 
     def _is_file(self, string=None):
         try:
-            if os.path.exists(string):
-                return True
+            return os.path.exists(string)
         except Exception:
             return False
-        return False
-    
+
     def _is_geojson_file(self, path=None):
-        logger.debug("GeoJson magic result:"+ magic.from_file(path))
-        return magic.from_file(path).find('ASCII') or magic.from_file(path).find('JSON') >= 0
+        logger.debug("GeoJson magic result:" + magic.from_file(path))
+        return magic.from_file(path).find('JSON') >= 0
 
     def _is_json_string(self, string=None):
         """
@@ -249,23 +253,30 @@ class Vector(object):
 
         # args[0] / -filename
         if self._is_file(filename):
+            logger.debug("_builder input is a file")
             if self._is_geojson_file(filename):
+                logger.debug("_builder input appears to be geojson -- processing")
                 _features = GeoJson(filename=filename)
             elif self._is_shapefile(filename):
+                logger.debug("_builder input appears to be a shapefile -- processing")
                 _features = Shapefile(filename)
             elif self._is_geopackage(filename):
+                logger.debug("_builder input appears to be a geopackage -- processing")
                 _features = GeoPackage(filename, layer, driver)
             elif self._is_postgis(filename):
+                logger.debug("_builder input appears to be a PostGIS database -- processing")
                 _features = PostGis(filename, dsn)
             else:
-                raise FileNotFoundError("Couldn't process the provided filename as vector data")
-        if self._is_json_string(json):
+                raise FileNotFoundError(
+                    "Couldn't process the provided filename as vector data")
+        elif self._is_json_string(json):
             _features = GeoJson(json=json)
         else:
-            raise ValueError("Couldn't handle input data provided by user -- is this a valid JSON string or filename?")
+            raise ValueError(
+                "Couldn't handle input data provided by user -- is this a valid JSON string or filename?")
 
         self.attributes = _features.attributes
-        self.geometries =  _features.geometries
+        self.geometries = _features.geometries
         self.schema = _features.schema
         self.crs = _features.crs
         self.crs_wkt = _features.crs_wkt
@@ -292,7 +303,7 @@ class Vector(object):
             _gdf = _gdf.join(self.attributes)
         except Exception:
             logger.debug("failed to build a GeoDataFrame from shapely"
-                           "geometries")
+                         "geometries")
             raise Exception()
         return _gdf
 
@@ -304,21 +315,20 @@ class Vector(object):
         if not stringify:
             return json.loads(self.to_geodataframe().to_json())
         return self.to_geodataframe().to_json()
-        
 
     def to_ee_feature_collection(self):
         raise NotImplementedError
-        #return ee.FeatureCollection(self.to_geojson(stringify=True))
+        # return ee.FeatureCollection(self.to_geojson(stringify=True))
 
 
 class Fiona(object):
     def __init__(self, input=None, layer=None, driver='ESRI Shapefile'):
-        
+
         self.filename = []
         self.crs = None
         self.crs_wkt = None
         self.schema = None
-        
+
         if input is not None:
             self.filename = input
             _shape_collection = fiona.open(input, layer=layer, driver=driver)
@@ -386,10 +396,10 @@ class GeoJson(Fiona):
             logger.debug('Unknown input passed to GeoJson constructor by user')
             raise ValueError
 
-
     def read(self):
         """Read JSON data from a file using fiona"""
         raise NotImplementedError
+
 
 class GeoPackage(Fiona):
     def __init__(self, *args, **kwargs):
@@ -399,4 +409,3 @@ class GeoPackage(Fiona):
 class FeatureCollection(EeGeometries, EeAttributes):
     def __init__(self, *args, **kwargs):
         super().__init__()
-

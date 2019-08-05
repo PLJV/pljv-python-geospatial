@@ -23,7 +23,7 @@ __status__ = "Testing"
 
 # logging
 import logging
-logging.basicConfig(level=logging.debug)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # mmap file caching and file handling
