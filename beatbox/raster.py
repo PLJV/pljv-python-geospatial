@@ -476,3 +476,22 @@ class Raster(object):
             return Gdal(file=config['input'])
         elif _is_wkt_str(config['input']):
             return Gdal(wkt=config['input'])
+            
+    def to_georaster(self):
+        """ Parses internal Raster elements and returns as a clean GeoRaster
+        object.
+        :return:
+        """
+        return GeoRaster(
+            self.array,
+            self.geot,
+            nodata_value=self.ndv,
+            projection=self.projection,
+            datatype=self.dtype
+        )
+
+    def to_numpy_array(self):
+        """ Returns numpy array values for our Raster object.
+        :return:
+        """
+        return self.array
