@@ -240,13 +240,8 @@ class Gdal(object):
         """
         # grab raster meta information from GeoRasters
         try:
-            _ndv, _x_size, _y_size, self.geot, self.projection, _dtype = \
+            self.ndv, self.x_size, self.y_size, self.geot, self.projection, self.dtype = \
                 get_geo_info(self.filename)
-            # if the user explicitly set raster options, honor them
-            self.ndv = _ndv if self.ndv is _DEFAULT_NA_VALUE else self.ndv
-            self.x_size = _x_size if self.x_size is None else self.x_size
-            self.y_size = _y_size if self.y_size is None else self.y_size
-            self.dtype = _dtype if self.dtype is _DEFAULT_DTYPE else self.dtype
         except Exception:
             raise AttributeError("problem processing file input -- is this" +\
                 " a raster file?")
