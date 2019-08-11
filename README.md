@@ -13,9 +13,8 @@ onto this repository while looking for ways to crunch geospatial data with
 Python, **this is probably not your tool**. There are more mature upstream 
 projects available. For vector data, consider 
 [GeoPandas](https://developers.google.com/earth-engine/python_install_manual). 
-For raster data, consider [GeoRasters](https://github.com/ozak/georasters). For  
-distributed computing workflows, 
-consider [GeoTrellis](https://github.com/locationtech/geotrellis).*  
+For raster data, consider [GeoRasters](https://github.com/ozak/georasters). For
+distributed computing workflows, consider [GeoTrellis](https://github.com/locationtech/geotrellis).*  
 
 For an overview of installing the Earth Engine Python API 
 ([RTM](https://developers.google.com/earth-engine/python_install_manual)).
