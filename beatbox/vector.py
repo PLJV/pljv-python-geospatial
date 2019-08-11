@@ -374,7 +374,7 @@ class Shapefile(Fiona):
 
 
 class GeoJson(Fiona):
-    def __init__(self, filename=None, json=None, *args):
+    def __init__(self, **kwargs):
         """
         GeoJson extension for our Fiona interface that is typically used to 
         read geojson files from a hard disk and build a vector object. 
@@ -382,14 +382,14 @@ class GeoJson(Fiona):
         :return:
         """
 
-        if filename is not None:
-            super().__init__(input=filename, driver='GeoJSON')
-        elif json is not None:
+        if kwargs.get('filename') is not None:
+            super().__init__(input=kwargs.get('filename'), driver='GeoJSON')
+        elif kwargs.get('json') is not None:
             super().__init__()
-            self.geometries = Geometries(json).geometries
+            self.geometries = Geometries(kwargs.get('json')).geometries
             self.attributes = Attributes(self.geometries).attributes
             try:
-                self.crs = json.loads(json)['crs']['properties']['name']
+                self.crs = json.loads(kwargs.get('json'))['crs']['properties']['name']
             except Exception:
                 logger.debug('Failed to set CRS from input json string')
         else:

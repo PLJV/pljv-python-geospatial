@@ -13,8 +13,7 @@ et al only where needed.
 
 __author__ = "Kyle Taylor"
 __copyright__ = "Copyright 2019, Playa Lakes Joint Venture"
-__credits__ = ["Kyle Taylor", "Alex Daniels", "Meghan Bogaerts",
-               "Stephen Chang"]
+__credits__ = ["Kyle Taylor", "Alex Daniels", "Meghan Bogaerts","Stephen Chang"]
 __license__ = "GPL"
 __version__ = "3"
 __maintainer__ = "Kyle Taylor"
@@ -69,7 +68,7 @@ _NUMPY_TYPES = {
 }
 
 def _split(raster=None, n=None):
-    """ 
+    """
     Wrapper for np._array_split. Splits an input array into n (mostly)
     equal segments, possibly for a parallelized operation.
     :param np.array raster:
@@ -146,7 +145,7 @@ def _est_array_size(obj=None, byte_size=None, dtype=None):
         _byte_size = _to_numpy_type(obj.array.dtype)
     else:
         _array_len = len(obj)
-    
+
     if dtype is not None:
         _byte_size = sys.getsizeof(_to_numpy_type(dtype))
     else:
@@ -198,7 +197,7 @@ def _is_wkt_str(wkt=None, *args):
 
 
 class Gdal(object):
-    def __init__(self, file=None, wkt=None, dtype=_DEFAULT_DTYPE, *args):
+    def __init__(self, **kwargs):
         """
         Wrapper for gdal primatives to fetch raster data from a file 
         or SQL database through WKT strings
@@ -207,32 +206,27 @@ class Gdal(object):
         :param str wkt: A GDAL-formatted WKT string; e.g., that can be used to open rasters on a SQL server.
         :param bool use_disc_caching: Should we attempt to read our raster into RAM or should we cache it to disc? 
         """
-        self.filename = file
-        self.wkt = wkt
-        self.dtype = dtype
-
-        if not args:
-            args = {}
-        else:
-            args = args[0]
-
-        self.ndv = args.get('ndv', _DEFAULT_NA_VALUE)
-        self.x_size = args.get('x_size', None)
-        self.y_size = args.get('y_size', None)
-        self.geot = args.get('geot', None)
-        self.projection = args.get('projection', None)
-        self._use_disc_caching = args.get('use_disc_caching', None)
+        self.filename = kwargs.get('file')
+        self.wkt = kwargs.get('wkt')
+        self.dtype = kwargs.get('dtype',_DEFAULT_DTYPE)
+        self.ndv = kwargs.get('ndv', _DEFAULT_NA_VALUE)
+        self.x_size = kwargs.get('x_size')
+        self.y_size = kwargs.get('y_size')
+        self.geot = kwargs.get('geot')
+        self.projection = kwargs.get('projection')
+        self._use_disc_caching = kwargs.get('use_disc_caching')
 
         if self._use_disc_caching is not None:
             self._use_disc_caching = str(randint(1, 9E09)) + \
                                        '_np_array.dat'
+            logger.debug("Using disc caching file for large numpy array: " + self._use_disc_caching)
         # allow for an empty specification
         if self.filename is not None:
             self.open()
         elif self.wkt is not None:
             logger.debug("WKT string input is not supported yet")
             raise NotImplementedError
-        
+
     def open(self):
         """
         Read a raster file from disc as a formatted numpy array
@@ -256,7 +250,7 @@ class Gdal(object):
         if self._use_disc_caching is not None:
             # create a cache file
             self.array = np.memmap(
-                filename=self._use_disc_caching, dtype=self.dtype, mode='w+',
+                filename=self._use_disc_caching, dtype=_to_numpy_type(self.dtype), mode='w+',
                 shape = (self.y_size, self.x_size))
             # load file contents into the cache
             self.array[:] = gdalnumeric.LoadFile(
@@ -297,35 +291,36 @@ def _to_numpy_type(user_str):
     return None
 
 class Raster(object):
-    def __init__(self,input=None, port=None, *args):
+    def __init__(self,**kwargs):
         self.array = []
         self.crs = []
         self.crs_wkt = []
         self.geot = None
+        self._use_disc_caching = None
 
-        if not args:
-            args = {}
-        else:
-          args = args[0]
-
-        username = args.get('username', None)
-        password = args.get('password', None)
-        
         # allow for an empty specification by user
-        if input:
-            self._builder({'input':input, 'port':port, 'username':username, 'password':password})
+        if kwargs.get('input') is not None:
+            self._builder(kwargs)
+
+    def __del__(self):
+        if os.path.exists(self._use_disc_caching):
+            logger.debug("Removing local numpy disc caching file: " + self._use_disc_caching)
+            os.remove(self._use_disc_caching)
 
     def _builder(self, config):
-        if os.path.exists(config['input']):
-            _raster = Gdal(file=config['input'])
-        elif _is_wkt_str(config['input']):
-            _raster = Gdal(wkt=config['input'])
+        if os.path.exists(config.get('input')):
+            _kwargs = { 'file': config.pop('input') }
+            _kwargs.update(config)
+            _raster = Gdal(**_kwargs)
+        elif _is_wkt_str(config.get('input')):
+            _raster = Gdal(wkt=config.get('input'))
 
         self.array = _raster.array
         self.geot = _raster.geot
         self.ndv = _raster.ndv
         self.projection = _raster.projection
         self.dtype = _raster.dtype
+        self._use_disc_caching = _raster._use_disc_caching
 
     def to_georaster(self):
         """ Parses internal Raster elements and returns as a clean GeoRaster
