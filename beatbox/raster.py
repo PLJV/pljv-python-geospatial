@@ -196,6 +196,47 @@ def _is_wkt_str(wkt=None, *args):
     raise NotImplementedError
 
 
+class NdArrayDiscCache(object):
+    def __init__(self, **kwargs):
+        """
+        ArrayDiscCache helps build a local numpy memmap file and either loads raster data from disc into the cache, 
+        or attempts a direct assignment of a user-specific numpy array to a cache file (via the input= argument).
+        :param str input: Either a full path to a raster file memmap'd to disk or an nd array object that is mapped directly
+        :param str dtype: Numpy datatype specification to use for our array cache
+        :param str x_size: Number of cells (x-axis) to use for our array cache
+        :param str y_size: Number of cells (y-axis) to use for our array cache
+        """
+        self.disc_cache_file = kwargs.get('cache_filename', str(randint(1, 9E09)) + '_np_array.dat')
+        self.dtype = kwargs.get('dtype', _DEFAULT_DTYPE)
+        self.x_size = kwargs.get('x_size')
+        self.y_size = kwargs.get('y_size')
+        self.ndv = kwargs.get('ndv', _DEFAULT_NA_VALUE)
+
+        logger.debug("Using disc caching file for large numpy array: " + self.disc_cache_file)
+
+        # create a cache file
+        self.array = np.memmap(
+            filename=self.disc_cache_file, dtype=_to_numpy_type(self.dtype), mode='w+',
+            shape = (self.y_size, self.x_size)
+        )
+        # if the user specified a valid file path or numpy array object, try to read it into our cache
+        # but otherwise allow an empty specification
+        if kwargs.get('input') is not None:
+            if os.path.exists(kwargs.get('input')):
+                logger.debug("Loading file contents into disc cache file:" + self.disc_cache_file)
+                self.array[:] = gdalnumeric.LoadFile(
+                    filename=kwargs.get('input'),
+                    buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(_to_numpy_type(self.dtype))
+                )[:]
+            else:
+                self.array[:] = kwargs.get('input')[:]
+    
+    def __del__(self):
+        if os.path.exists(self.disc_cache_file):
+            logger.debug("Removing local numpy disc caching file: " + self.disc_cache_file)
+            os.remove(self.disc_cache_file)
+
+
 class Gdal(object):
     def __init__(self, **kwargs):
         """
@@ -216,10 +257,6 @@ class Gdal(object):
         self.projection = kwargs.get('projection')
         self._use_disc_caching = kwargs.get('use_disc_caching')
 
-        if self._use_disc_caching is not None:
-            self._use_disc_caching = str(randint(1, 9E09)) + \
-                                       '_np_array.dat'
-            logger.debug("Using disc caching file for large numpy array: " + self._use_disc_caching)
         # allow for an empty specification
         if self.filename is not None:
             self.open()
@@ -243,15 +280,8 @@ class Gdal(object):
         # that will store in memory or as a disc cache, depending
         # on the state of our _use_disc_caching property
         if self._use_disc_caching is not None:
-            # create a cache file
-            self.array = np.memmap(
-                filename=self._use_disc_caching, dtype=_to_numpy_type(self.dtype), mode='w+',
-                shape = (self.y_size, self.x_size))
-            # load file contents into the cache
-            self.array[:] = gdalnumeric.LoadFile(
-                filename=self.filename,
-                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(_to_numpy_type(self.dtype))
-            )[:]
+            # create a cache file and load file contents into the cache
+            self.array = NdArrayDiscCache(input=self.filename, dtype=self.dtype, x_size=self.x_size, y_size=self.y_size).array
         # by default, load the whole file into memory
         else:
             self.array = gdalnumeric.LoadFile(

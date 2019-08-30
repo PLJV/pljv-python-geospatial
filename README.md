@@ -1,11 +1,11 @@
 ### Beatbox
 Beatbox is a simple Python wrapper for GDAL, Shapely, GeoRasters, and GeoPandas. 
 It is designed to be a portable interface for working with large spatial 
-datasets on cloud platforms like AWS and Google App Engine / Earth Engine. You 
-install it's standard dependencies with anaconda or pip and can produce raster 
+datasets on hybrid cloud deployments like your closet computer and AWS/Earth Engine. 
+You install it's standard dependencies with anaconda or pip and can produce raster 
 and vector datasets that can be integrated into common spatial 
 processing frameworks and distributed computing workflows. PLJV uses beatbox 
-downstream for cloud computing tasks. You will see it used as a standard 
+downstream for hybrid cloud computing tasks. You will see it used as a standard 
 dependency on a number of our other projects.
 
 *This is still a young project. If you are not a collaborator and just happened 
