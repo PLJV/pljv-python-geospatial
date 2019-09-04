@@ -119,9 +119,7 @@ def _no_data_value_sanity_check(obj=None):
     return(obj.ndv)
 
 def _est_free_ram():
-    """ Determines the amount of free ram available for an operation. This is
-    typically used in conjunction with _est_array_size() or as a precursor
-    to raising MemoryError when working with large raster datasets
+    """ Determines the amount of free ram available for an operation. 
     :return: int (free ram measured in bytes)
     """
     return psutil.virtual_memory().free
@@ -195,6 +193,18 @@ def _is_wkt_str(wkt=None, *args):
     """
     raise NotImplementedError
 
+def _is_valid_path(path):
+    _is_valid = False
+    try:
+        if os.path.exists(path):
+            _is_valid = True
+    except TypeError:
+        _is_valid = False
+    except ValueError:
+        _is_valid = False
+
+    return _is_valid
+
 
 class NdArrayDiscCache(object):
     def __init__(self, **kwargs):
@@ -214,27 +224,36 @@ class NdArrayDiscCache(object):
 
         logger.debug("Using disc caching file for large numpy array: " + self.disc_cache_file)
 
-        # create a cache file
-        self.array = np.memmap(
-            filename=self.disc_cache_file, dtype=_to_numpy_type(self.dtype), mode='w+',
-            shape = (self.y_size, self.x_size)
-        )
         # if the user specified a valid file path or numpy array object, try to read it into our cache
         # but otherwise allow an empty specification
-        if kwargs.get('input') is not None:
-            if os.path.exists(kwargs.get('input')):
+        if kwargs.get('input') is None:
+            # by default, just create an empty cache file from the parameters specified by the user
+            self.array = np.memmap(
+                filename=self.disc_cache_file, dtype=_to_numpy_type(self.dtype), mode='w+',
+                shape = (self.y_size, self.x_size)
+            )
+        else:
+
+            if _is_valid_path(kwargs.get('input')):
                 logger.debug("Loading file contents into disc cache file:" + self.disc_cache_file)
+                _raster_file = gdal.Open(kwargs.get('input'))
+                self.array = np.memmap(
+                    filename=self.disc_cache_file, dtype=_to_numpy_type(self.dtype), mode='w+',
+                    shape = (_raster_file.RasterYSize, _raster_file.RasterXSize)
+                )
+                del _raster_file 
                 self.array[:] = gdalnumeric.LoadFile(
                     filename=kwargs.get('input'),
                     buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(_to_numpy_type(self.dtype))
                 )[:]
             else:
+                logger.debug("Treating input= object as numpy array object and reading into disc cache file:" + self.disc_cache_file)
+                self.array = np.memmap(
+                    filename=self.disc_cache_file, dtype=kwargs.get('input').dtype, mode='w+',
+                    shape = kwargs.get('input').shape
+                )
                 self.array[:] = kwargs.get('input')[:]
-    
-    def __del__(self):
-        if os.path.exists(self.disc_cache_file):
-            logger.debug("Removing local numpy disc caching file: " + self.disc_cache_file)
-            os.remove(self.disc_cache_file)
+
 
 
 class Gdal(object):
@@ -269,7 +288,7 @@ class Gdal(object):
         Read a raster file from disc as a formatted numpy array
         :rval none:
         """
-        # grab raster meta information from GeoRasters
+        # grab raster meta informationP from GeoRasters
         try:
             self.ndv, self.x_size, self.y_size, self.geot, self.projection, self.dtype = \
                 get_geo_info(self.filename)
@@ -281,7 +300,9 @@ class Gdal(object):
         # on the state of our _use_disc_caching property
         if self._use_disc_caching is not None:
             # create a cache file and load file contents into the cache
-            self.array = NdArrayDiscCache(input=self.filename, dtype=self.dtype, x_size=self.x_size, y_size=self.y_size).array
+            _cached_file = NdArrayDiscCache(input=self.filename, dtype=self.dtype, x_size=self.x_size, y_size=self.y_size)
+            self.array = _cached_file.array
+            self._disc_cache_file = _cached_file.disc_cache_file
         # by default, load the whole file into memory
         else:
             self.array = gdalnumeric.LoadFile(
@@ -317,23 +338,28 @@ def _to_numpy_type(user_str):
 
 class Raster(object):
     def __init__(self,**kwargs):
+        """
+        Raster class will intuit how to read raster data depending on the context of user-input.
+        :param input: input string that can be a dictionary of named arguments, JSON, or a full-path to a file to read from disc.
+        """
         self.array = []
         self.crs = []
         self.crs_wkt = []
         self.geot = None
         self._use_disc_caching = None
+        self._disc_cache_file = None
 
         # allow for an empty specification by user
         if kwargs.get('input') is not None:
             self._builder(kwargs)
 
     def __del__(self):
-        if os.path.exists(self._use_disc_caching):
-            logger.debug("Removing local numpy disc caching file: " + self._use_disc_caching)
-            os.remove(self._use_disc_caching)
+        logger.debug("Attempting removing local numpy disc caching file: " + self._disc_cache_file)
+        if _is_valid_path(self._disc_cache_file):
+            os.remove(self._disc_cache_file)
 
     def _builder(self, config):
-        if os.path.exists(config.get('input')):
+        if _is_valid_path(config.get('input')):
             _kwargs = { 'file': config.pop('input') }
             _kwargs.update(config)
             _raster = Gdal(**_kwargs)
@@ -346,6 +372,7 @@ class Raster(object):
         self.projection = _raster.projection
         self.dtype = _raster.dtype
         self._use_disc_caching = _raster._use_disc_caching
+        self._disc_cache_file = _raster._disc_cache_file
 
     def to_georaster(self):
         """ Parses internal Raster elements and returns as a clean GeoRaster
