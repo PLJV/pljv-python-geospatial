@@ -1,6 +1,8 @@
 import json
 import psycopg2
 
+from beatbox.vector import Vector
+
 class PostGis(object):
     def __init__(self,json_conf=None, **kwargs):
         self.host = None
@@ -29,7 +31,7 @@ class PostGis(object):
             self.username = args.get('username', None)
             self.password = args.get('password', None)
         if kwargs.get('sql') is not None:
-            self.sql_query_string = kwargs.get('sql', None)
+            self.sql_query_string = kwargs.get('sql')
         elif kwargs.get('table_name') is not None:
             self.sql_query_string = "SELECT * FROM " + kwargs.get('table_name') + ";"
 
@@ -52,9 +54,12 @@ class PostGis(object):
     def read_table(self):
         self.cursor.execute(self.sql_query_string)
         
+        
     def write_table(self):
         raise NotImplementedError
 
+    def to_geodataframe(self):
+        return Vector(input=json.dumps(dict(self.cursor))).to_geodataframe()
 
 class QsCredentials(object):
     """
