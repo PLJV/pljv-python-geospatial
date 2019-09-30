@@ -1,7 +1,14 @@
 import json
+import psycopg2
 
 class PostGis(object):
-    def __init__(self,json_conf=None, table_name=None, *args):
+    def __init__(self,json_conf=None, **kwargs):
+        self.host = None
+        self.port = None
+        self.username = None
+        self.password = None
+        self.database_name = None
+        self._sql_query_string = None
         if not args:
             args = {}
         else:
@@ -21,8 +28,33 @@ class PostGis(object):
             self.port = args.get('port', None)
             self.username = args.get('username', None)
             self.password = args.get('password', None)
+        if kwargs.get('sql') is not None:
+            self.sql_query_string = kwargs.get('sql', None)
+        elif kwargs.get('table_name') is not None:
+            self.sql_query_string = "SELECT * FROM " + kwargs.get('table_name') + ";"
+
+    @property
+    def sql_query_string(self):
+        return self._sql_query_string
+    
+    @sql_query_string.setter
+    def sql_query_string(self, *args):
+        self._sql_query_string = args[0]
+    
     def to_wkt(self):
         raise NotImplementedError
+
+    def connect(self):
+        self.cursor = psycopg2.\
+            connect(database=self.database_name,host=self.host, user=self.username, password=self.password).\
+            cursor()
+
+    def read_table(self):
+        self.cursor.execute(self.sql_query_string)
+        
+    def write_table(self):
+        raise NotImplementedError
+
 
 class QsCredentials(object):
     """
