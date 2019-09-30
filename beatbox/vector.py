@@ -232,8 +232,8 @@ class Vector(object):
     def _is_geopackage(self, path=None):
         return magic.from_file(path).find('SQLite') >= 0
 
-    def _is_postgis(self, string=None):
-        raise NotImplementedError
+    def _is_postgis(self, path=None):
+        return magic.from_file(path).find('JSON data') >= 0
 
     def _builder(self, filename=None, json=None, layer=None, dsn=None, driver='GPKG'):
         """
@@ -263,7 +263,7 @@ class Vector(object):
                 _features = GeoPackage(filename, layer, driver)
             elif self._is_postgis(filename):
                 logger.debug("_builder input appears to be a PostGIS database -- processing")
-                _features = PostGis(filename, dsn)
+                _features = PostGis(json_conf=filename, **dsn)
             else:
                 raise FileNotFoundError(
                     "Couldn't process the provided filename as vector data")
