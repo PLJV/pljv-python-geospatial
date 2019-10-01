@@ -211,7 +211,7 @@ class Vector(object):
         except Exception:
             return False
 
-    def _is_geojson_file(self, path=None):
+    def _is_json_file(self, path=None):
         logger.debug("GeoJson magic result:" + magic.from_file(path))
         return magic.from_file(path).find('JSON') >= 0
 
@@ -233,7 +233,7 @@ class Vector(object):
         return magic.from_file(path).find('SQLite') >= 0
 
     def _is_postgis(self, path=None):
-        return magic.from_file(path).find('JSON data') >= 0
+        return magic.from_file(path).find('JSON') >= 0
 
     def _builder(self, filename=None, json=None, layer=None, dsn=None, driver='GPKG'):
         """
@@ -252,18 +252,19 @@ class Vector(object):
         # args[0] / -filename
         if self._is_file(filename):
             logger.debug("_builder input is a file")
-            if self._is_geojson_file(filename):
-                logger.debug("_builder input appears to be geojson -- processing")
-                _features = GeoJson(filename=filename)
+            if self._is_json_file(filename):
+                logger.debug("_builder input appears to be json -- processing as a geojson file")
+                try:
+                    _features = GeoJson(filename=filename)
+                except fiona.errors.DriverError:
+                    logger.debug("couldn't process _builder input as geojson -- processing as json config file for PostGis")
+                    _features = Database(PostGis(json_conf=filename, session_args=dsn).connect().cursor)
             elif self._is_shapefile(filename):
                 logger.debug("_builder input appears to be a shapefile -- processing")
                 _features = Shapefile(filename)
             elif self._is_geopackage(filename):
                 logger.debug("_builder input appears to be a geopackage -- processing")
                 _features = GeoPackage(filename, layer, driver)
-            elif self._is_postgis(filename):
-                logger.debug("_builder input appears to be a PostGIS database -- processing")
-                _features = PostGis(json_conf=filename, **dsn)
             else:
                 raise FileNotFoundError(
                     "Couldn't process the provided filename as vector data")
@@ -319,6 +320,25 @@ class Vector(object):
         # return ee.FeatureCollection(self.to_geojson(stringify=True))
 
 
+class Database():
+    def __init__(self, obj=None):
+        """ 
+        Default interface for fetching vector data from a database server. Currently only PostgreSQL (with PostGis) is supported.
+        """
+        self.geometries = None
+        self.attributes = None
+        self.crs = None
+        self.crs_wkt = None
+        self.schema = None
+
+        if obj is not None:
+            obj = Vector(input=json.dumps(dict(obj.cursor)))
+            self.geometries = obj.geometries
+            self.attributes = obj.attributes
+            self.crs = obj.crs
+            self.crs_wkt = obj.crs_wkt
+            self.schema = obj.schema
+
 class Fiona(object):
     def __init__(self, input=None, layer=None, driver='ESRI Shapefile'):
 
@@ -364,7 +384,6 @@ class Fiona(object):
                 'geometry': mapping(self.geometries),
                 'properties': self.attributes.to_dict(),
             })
-
 
 class Shapefile(Fiona):
     def __init__(self, *args, **kwargs):
