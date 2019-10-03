@@ -1,6 +1,8 @@
 import json
 import psycopg2
 
+import geopandas as gp
+
 class PostGis(object):
     def __init__(self, json_conf=None, session_args=None):
         self.host = None
@@ -8,6 +10,7 @@ class PostGis(object):
         self.username = None
         self.password = None
         self.database_name = None
+        self.table_name = None
         self._sql_query_string = None
 
         if session_args is None:
@@ -21,40 +24,48 @@ class PostGis(object):
                 json_conf = json.loads(file.read())
                 self.host = session_args.get('host', json_conf.get('host', None))
                 self.port = session_args.get('port', json_conf.get('port', None))
-                self.username = session_args.get('username', json_conf.get('username', None)) 
+                self.username = session_args.get('username', json_conf.get('user', None)) 
                 self.password = session_args.get('password', json_conf.get('password', None))
                 self.database_name = session_args.get('database', json_conf.get('database', None)) 
+                self.table_name = session_args.get('table_name', json_conf.get('table', None))
         else:
             self.host = session_args.get('host', None)
             self.port = session_args.get('port', None)
             self.username = session_args.get('username', None)
             self.password = session_args.get('password', None)
             self.database_name = session_args.get('database', None)
+            self.table_name = session_args.get('table_name', None)
+       
         if session_args.get('sql') is not None:
-            self.sql_query_string = session_args.get('sql')
-        elif session_args.get('table_name') is not None:
-            self.sql_query_string = "SELECT * FROM " + session_args.get('table_name') + ";"
+            self._sql_query_string = session_args.get('sql')
+        elif self.table_name is not None:
+            self._sql_query_string = "SELECT * FROM " + self.table_name + ";"
+        
+        self.connect = psycopg2.\
+            connect(database=self.database_name,host=self.host, user=self.username, password=self.password)
+        self.cursor = self.connect.cursor()
 
     @property
-    def sql_query_string(self):
+    def sql_query(self):
         return self._sql_query_string
     
-    @sql_query_string.setter
-    def sql_query_string(self, *args):
+    @sql_query.setter
+    def sql_query(self, *args):
         self._sql_query_string = args[0]
     
     def to_wkt(self):
         raise NotImplementedError
 
-    def connect(self):
-        self.cursor = psycopg2.\
-            connect(database=self.database_name,host=self.host, user=self.username, password=self.password).\
-            cursor()
-
     def read_table(self):
-        self.cursor.execute(self.sql_query_string)
-        
-        
+        if self.sql_query is None:
+            raise Exception
+        try:
+            self.cursor.execute(self.sql_query)
+            df = self.cursor.fetchall()
+        finally:
+            self.cursor.close()
+        return df
+
     def write_table(self):
         raise NotImplementedError
 

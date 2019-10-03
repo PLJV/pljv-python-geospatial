@@ -172,7 +172,7 @@ class Vector(object):
             logger.debug(
                 "Accepting user-input as json string and attempting read: %s", input)
             self._builder(json=input)
-        elif isinstance(input, gp):
+        elif isinstance(input, gp.GeoDataFrame):
             logger.debug(
                 "Accepting user-input as geopandas and attempting read: %s", input)
             self._builder(json=input.to_json())
@@ -258,7 +258,7 @@ class Vector(object):
                     _features = GeoJson(filename=filename)
                 except fiona.errors.DriverError:
                     logger.debug("couldn't process _builder input as geojson -- processing as json config file for PostGis")
-                    _features = Database(PostGis(json_conf=filename, session_args=dsn).connect().cursor)
+                    _features = Database(PostGis(json_conf=filename, session_args=dsn)).to_vector()
             elif self._is_shapefile(filename):
                 logger.debug("_builder input appears to be a shapefile -- processing")
                 _features = Shapefile(filename)
@@ -331,13 +331,22 @@ class Database():
         self.crs_wkt = None
         self.schema = None
 
-        if obj is not None:
-            obj = Vector(input=json.dumps(dict(obj.cursor)))
-            self.geometries = obj.geometries
-            self.attributes = obj.attributes
-            self.crs = obj.crs
-            self.crs_wkt = obj.crs_wkt
-            self.schema = obj.schema
+        if obj is None:
+            raise AttributeError
+
+        self._database = obj
+
+    def to_geodataframe(self):
+        if self._database.sql_query is None:
+            raise Exception
+        try:
+            df = gp.GeoDataFrame.from_postgis(self._database.sql_query, self._database.connect)
+        finally:
+            self._database.cursor.close()
+        return df
+
+    def to_vector(self):
+        return Vector(input=self.to_geodataframe())
 
 class Fiona(object):
     def __init__(self, input=None, layer=None, driver='ESRI Shapefile'):
@@ -346,20 +355,20 @@ class Fiona(object):
         self.crs = None
         self.crs_wkt = None
         self.schema = None
+        self.attributes = None
+        self.geometries = None
 
         if input is not None:
             self.filename = input
             _shape_collection = fiona.open(input, layer=layer, driver=driver)
-        else:
-            raise ValueError("input= argument cannot be 'None'")
-        # assign our class private members from whatever was read
-        # from input
-        self.crs = _shape_collection.crs
-        self.crs_wkt = _shape_collection.crs_wkt
-        self.schema = _shape_collection.schema
-        # parse our dict of geometries into an actual shapely list
-        self.geometries = Geometries(_shape_collection).geometries
-        self.attributes = Attributes(_shape_collection).attributes
+            # assign our class private members from whatever was read
+            # from input
+            self.crs = _shape_collection.crs
+            self.crs_wkt = _shape_collection.crs_wkt
+            self.schema = _shape_collection.schema
+            # parse our dict of geometries into an actual shapely list
+            self.geometries = Geometries(_shape_collection).geometries
+            self.attributes = Attributes(_shape_collection).attributes
 
     def write(self, filename=None, type=None):
         """ wrapper for fiona.open that will write in-class geometry data to disk
@@ -403,8 +412,15 @@ class GeoJson(Fiona):
             super().__init__(input=kwargs.get('filename'), driver='GeoJSON')
         elif kwargs.get('json') is not None:
             super().__init__()
-            self.geometries = Geometries(kwargs.get('json')).geometries
-            self.attributes = Attributes(self.geometries).attributes
+            try:
+                self.geometries = Geometries(kwargs.get('json')).geometries
+                self.attributes = Attributes(kwargs.get('json')).attributes
+            except TypeError:
+                logger.debug('Failed to parse geometries from JSON input ')
+                if 'features' in list(json.loads(kwargs.get('json')).keys()) :
+                    logger.debug('Looks like were are a multi-part geometry wrapped as features -- monkey patching')
+                    self.geometries = Geometries(json.loads(kwargs.get('json'))['features']).geometries
+                    self.attributes = Attributes(json.loads(kwargs.get('json'))['features']).attributes
             try:
                 self.crs = json.loads(kwargs.get('json'))['crs']['properties']['name']
             except Exception:
