@@ -11,9 +11,7 @@ __status__ = "Testing"
 
 import logging
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 class Backend(object):
     """

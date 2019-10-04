@@ -22,7 +22,7 @@ __status__ = "Testing"
 
 # logging
 import logging
-logging.basicConfig(level=logging.DEBUG)
+
 logger = logging.getLogger(__name__)
 
 # mmap file caching and file handling
@@ -205,6 +205,13 @@ def _is_valid_path(path):
 
     return _is_valid
 
+def slope(array):
+    x, y = np.gradient(array)
+    return(np.pi/2. - np.arctan(np.sqrt(x*x + y*y)))
+
+def aspect(array):
+    x, y = np.gradient(array)
+    return np.arctan2(-x, y)
 
 class NdArrayDiscCache(object):
     def __init__(self, **kwargs):

@@ -11,7 +11,7 @@ __status__ = "Testing"
 
 # logging
 import logging
-logging.basicConfig(level=logging.DEBUG)
+
 logger = logging.getLogger(__name__)
 
 import os
@@ -139,7 +139,7 @@ class EeAttributes(Attributes):
 
 
 class Vector(object):
-    def __init__(self, input=None, *args):
+    def __init__(self, input=None, options=None):
         """Builder class that handles file input/output operations for shapefiles using fiona and shapely 
            built-ins and performs select spatial modifications on vector datasets
 
@@ -156,10 +156,8 @@ class Vector(object):
         self.crs = []
         self.crs_wkt = []
 
-        if not args:
-            args = {}
-        else:
-            args = args[0]
+        if options is None:
+            options = {}
 
         # specification for class methods
         if input is None:
@@ -167,7 +165,7 @@ class Vector(object):
             pass
         elif self._is_file(input):
             logger.debug("Accepting user-input as file and attempting read: %s", input)
-            self._builder(filename=input)
+            self._builder(filename=input, dsn=options)
         elif self._is_json_string(input):
             logger.debug(
                 "Accepting user-input as json string and attempting read: %s", input)
@@ -177,8 +175,7 @@ class Vector(object):
                 "Accepting user-input as geopandas and attempting read: %s", input)
             self._builder(json=input.to_json())
         else:
-            logger.exception("Unhandled input provided to Vector()")
-            raise ValueError()
+            raise ValueError("Unhandled input= provided to Vector()")
 
     def __copy__(self):
         """ Simple copy method that creates a new instance of a vector class and assigns 
@@ -320,7 +317,7 @@ class Vector(object):
         # return ee.FeatureCollection(self.to_geojson(stringify=True))
 
 
-class Database():
+class Database(object):
     def __init__(self, obj=None):
         """ 
         Default interface for fetching vector data from a database server. Currently only PostgreSQL (with PostGis) is supported.
@@ -416,18 +413,21 @@ class GeoJson(Fiona):
                 self.geometries = Geometries(kwargs.get('json')).geometries
                 self.attributes = Attributes(kwargs.get('json')).attributes
             except TypeError:
-                logger.debug('Failed to parse geometries from JSON input ')
-                if 'features' in list(json.loads(kwargs.get('json')).keys()) :
-                    logger.debug('Looks like were are a multi-part geometry wrapped as features -- monkey patching')
-                    self.geometries = Geometries(json.loads(kwargs.get('json'))['features']).geometries
-                    self.attributes = Attributes(json.loads(kwargs.get('json'))['features']).attributes
+                logger.debug('Failed to parse geometries from JSON string input -- parsing as a dictionary with key checking')
+                _json = json.loads(kwargs.get('json'))
+                if 'features' in list(_json.keys()) :
+                    logger.debug('Looks like our geometries were wrapped as features -- monkey-patching')
+                    self.geometries = Geometries(_json['features']).geometries
+                    self.attributes = Attributes(_json['features']).attributes
             try:
-                self.crs = json.loads(kwargs.get('json'))['crs']['properties']['name']
-            except Exception:
-                logger.debug('Failed to set CRS from input json string')
+                self.crs = _json['crs']['properties']['name']
+            except KeyError:
+                try:
+                    self.crs = _json['features']['crs']['properties']['name']
+                except Exception:
+                    logger.warning('Warning : Failed to set CRS from input json string')
         else:
-            logger.debug('Unknown input passed to GeoJson constructor by user')
-            raise ValueError
+            raise ValueError('Unknown input passed to GeoJson constructor by user')
 
     def read(self):
         """Read JSON data from a file using fiona"""
