@@ -25,7 +25,7 @@ warnings.filterwarnings("ignore")
 import numpy as np
 import argparse as ap
 
-from beatbox.raster import Raster, binary_reclassify
+from beatbox.raster import Raster
 from beatbox.moving_windows import ndimage_filter
 
 warnings.filterwarnings("default")
