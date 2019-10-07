@@ -300,13 +300,13 @@ class Gdal(object):
         self.geot = kwargs.get('geot')
         self.projection = kwargs.get('projection')
         self._use_disc_caching = kwargs.get('use_disc_caching')
+        self._disc_cache_file = None
 
         # allow for an empty specification
         if self.filename is not None:
             self.open()
         elif self.wkt is not None:
-            logger.debug("WKT string input is not supported yet")
-            raise NotImplementedError
+            raise NotImplementedError('WKT string input is not supported yet')
 
     def open(self):
         """
