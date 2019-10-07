@@ -362,7 +362,7 @@ def _to_numpy_type(user_str):
     return None
 
 class Raster(object):
-    def __init__(self,**kwargs):
+    def __init__(self, **kwargs):
         """
         Raster class will intuit how to read raster data depending on the context of user-input.
         :param input: input string that can be a dictionary of named arguments, JSON, or a full-path to a file to read from disc.
@@ -370,6 +370,9 @@ class Raster(object):
         self.array = []
         self.crs = []
         self.crs_wkt = []
+        self.ndv = _DEFAULT_NA_VALUE
+        self.projection = None
+        self.dtype = _DEFAULT_DTYPE
         self.geot = None
         self._use_disc_caching = False
         self._disc_cache_file = None
@@ -389,6 +392,7 @@ class Raster(object):
             _kwargs = { 'file': config.pop('input') }
             _kwargs.update(config)
             _raster = Gdal(**_kwargs)
+            self.array = _raster.array
         # elif _is_wkt_str(config.get('input')):
         #     _raster = Gdal(wkt=config.get('input'))
         elif _is_array(config.get('input')):
@@ -397,12 +401,14 @@ class Raster(object):
         elif _is_raster(config.get('input')):
             _raster = config.get('input')
             if _raster._use_disc_caching:
-                self.array = NdArrayDiscCache(
+                _cached_file = NdArrayDiscCache(
                     input=_raster.array, 
                     dtype=_raster.dtype, 
-                    x_size=_raster.x_size, 
-                    y_size=_raster.y_size
+                    x_size=_raster.array.shape[0], 
+                    y_size=_raster.array.shape[1]
                 )
+                self.array = _cached_file.array
+                self._disc_cache_file = _cached_file.disc_cache_file
         else:
             # allow an empty specification
             _raster = Raster()
