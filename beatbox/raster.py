@@ -167,6 +167,24 @@ def _process_blockwise(*args):
         yield _array[i:i + _n_chunks]
 
 
+def _is_raster(obj=None):
+    try:
+        if isinstance(obj, Raster):
+            return True
+        else:
+            return False
+    except:
+        return False
+
+def _is_array(obj=None):
+    try:
+        if isinstance(obj, np.ma.core.MaskedArray):
+            return True
+        else:
+            return False
+    except Exception:
+        return False
+
 def _is_number(num_list=None):
     """
     Determine whether any item in a list is not a number.
@@ -372,6 +390,21 @@ class Raster(object):
             _raster = Gdal(**_kwargs)
         elif _is_wkt_str(config.get('input')):
             _raster = Gdal(wkt=config.get('input'))
+        elif _is_array(config.get('input')):
+            _raster = Raster()
+            _raster.array[:] = config.get('input')[:]
+        elif _is_raster(config.get('input')):
+            _raster = config.get('input')
+            if _raster._use_disc_caching:
+                self.array = NdArrayDiscCache(
+                    input=_raster.array, 
+                    dtype=_raster.dtype, 
+                    x_size=_raster.x_size, 
+                    y_size=_raster.y_size
+                )
+        else:
+            # allow an empty specification
+            _raster = Raster()
 
         self.array = _raster.array
         self.geot = _raster.geot
