@@ -388,8 +388,8 @@ class Raster(object):
             _kwargs = { 'file': config.pop('input') }
             _kwargs.update(config)
             _raster = Gdal(**_kwargs)
-        elif _is_wkt_str(config.get('input')):
-            _raster = Gdal(wkt=config.get('input'))
+        # elif _is_wkt_str(config.get('input')):
+        #     _raster = Gdal(wkt=config.get('input'))
         elif _is_array(config.get('input')):
             _raster = Raster()
             _raster.array[:] = config.get('input')[:]
