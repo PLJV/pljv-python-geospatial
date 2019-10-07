@@ -405,8 +405,8 @@ class Raster(object):
         else:
             # allow an empty specification
             _raster = Raster()
+            self.array = _raster.array
 
-        self.array = _raster.array
         self.geot = _raster.geot
         self.ndv = _raster.ndv
         self.projection = _raster.projection
