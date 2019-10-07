@@ -317,8 +317,8 @@ class Gdal(object):
         self.y_size = kwargs.get('y_size')
         self.geot = kwargs.get('geot')
         self.projection = kwargs.get('projection')
-        self._use_disc_caching = kwargs.get('use_disc_caching')
-        self._disc_cache_file = None
+        self.use_disc_caching = kwargs.get('use_disc_caching', False)
+        self.disc_cache_file = kwargs.get('disc_cache_file', None)
 
         # allow for an empty specification
         if self.filename is not None:
@@ -340,12 +340,12 @@ class Gdal(object):
                 " a raster file?")
         # call gdal with explicit type specification
         # that will store in memory or as a disc cache, depending
-        # on the state of our _use_disc_caching property
-        if self._use_disc_caching is not None:
+        # on the state of our use_disc_caching property
+        if self.use_disc_caching is True:
             # create a cache file and load file contents into the cache
             _cached_file = NdArrayDiscCache(input=self.filename, dtype=self.dtype, x_size=self.x_size, y_size=self.y_size)
             self.array = _cached_file.array
-            self._disc_cache_file = _cached_file.disc_cache_file
+            self.disc_cache_file = _cached_file.disc_cache_file
         # by default, load the whole file into memory
         else:
             self.array = gdalnumeric.LoadFile(
@@ -360,7 +360,6 @@ class Gdal(object):
         )
 
     def read_table(self, *args):
-        connection = PostGis(args[0]).to_wkt
         raise NotImplementedError
 
 def _to_numpy_type(user_str):
@@ -392,18 +391,18 @@ class Raster(object):
         self.projection = None
         self.dtype = _DEFAULT_DTYPE
         self.geot = None
-        self._use_disc_caching = False
-        self._disc_cache_file = None
+        self.use_disc_caching = False
+        self.disc_cache_file = None
 
         # allow for an empty specification by user
         if input is not None:
             self._builder(input, kwargs)
 
     def __del__(self):
-        if self._use_disc_caching is True:
-            logger.debug("Attempting removing local numpy disc caching file: " + self._disc_cache_file)
-            if _is_valid_path(self._disc_cache_file):
-                os.remove(self._disc_cache_file)
+        if self.use_disc_caching is True:
+            logger.debug("Attempting removing local numpy disc caching file: " + self.disc_cache_file)
+            if _is_valid_path(self.disc_cache_file):
+                os.remove(self.disc_cache_file)
 
     def _builder(self, input=None, config={}):
         if _is_valid_path(input):
@@ -418,13 +417,13 @@ class Raster(object):
             _raster.array[:] = input[:]
         elif _is_raster(input):
             _raster = input
-            if _raster._use_disc_caching is True:
+            if _raster.use_disc_caching is True:
                 _cached_file = NdArrayDiscCache(
                     input=_raster.array, 
                     dtype=_raster.dtype
                 )
                 self.array = _cached_file.array
-                self._disc_cache_file = _cached_file.disc_cache_file
+                self.disc_cache_file = _cached_file.disc_cache_file
         else:
             # allow an empty specification
             _raster = Raster()
@@ -434,8 +433,8 @@ class Raster(object):
         self.ndv = _raster.ndv
         self.projection = _raster.projection
         self.dtype = _raster.dtype
-        self._use_disc_caching = _raster._use_disc_caching
-        self._disc_cache_file = _raster._disc_cache_file
+        self.use_disc_caching = _raster.use_disc_caching
+        self.disc_cache_file = _raster.disc_cache_file
 
     def to_georaster(self):
         """ Parses internal Raster elements and returns as a clean GeoRaster

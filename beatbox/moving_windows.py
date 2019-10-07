@@ -17,7 +17,7 @@ import os
 import re
 import numpy as np
 
-from .raster import Raster
+from .raster import Raster, NdArrayDiscCache
 from scipy import ndimage
 
 
@@ -45,57 +45,39 @@ def _dict_to_mwindow_filename(key, window_size):
     """
     return str(key)+"_"+str(window_size)+"x"+str(window_size)
 
-def ndimage_filter(image=None, outfile=None, **kwargs):
+def ndimage_filter(array=None, **kwargs):
     """
     Wrapper for ndimage filters that can comprehend a GeoRaster,
     apply a common rcular buffer, and optionally writes a numpy array to
     disk following user specifications
     """
-    if not args:
-        args = {}
+    kwargs['use_disc_caching'] = kwargs.get('use_disc_caching', False)
+    kwargs['footprint'] = kwargs.get('footprint', None)
+    kwargs['function'] = kwargs.get('function', None)
+    kwargs['size'] = kwargs.get('size', None)
+    kwargs['intermediate_dtype'] = kwargs.get('intermediate_dtype', None),
+    kwargs['dtype'] = kwargs.get('dtype', array.dtype)
 
-    _write = kwargs.get('write', _DEFAULT_WRITE_ACTION)
-    _footprint = kwargs.get('footprint', None)
-    _overwrite = kwargs.get('overwrite', _DEFAULT_OVERWRITE_ACTION)
-    _function = kwargs.get('function', None)
-    _size = kwargs.get('size', None)
-    _intermediate_dtype = kwargs.get('intermediate_dtype', _DEFAULT_DTYPE),
-    _dtype = kwargs.get('dtype', _DEFAULT_DTYPE)
-
-    try:
-        if outfile is None:
-            write = False
-        else:
-            write = not os.path.isfile(outfile) | _overwrite & _write
-            logger.debug("Will attempt to write raster file to dir: %s as %s", os.getcwd(), _outfile)
-    except TypeError as e:
-        logger.debug("Encountered an issue specifying a write file; "
-            "filter will return result to user : %s", e)
-        write = False
-    
-    try:
-        _xsize = image._xsize
-        _ysize = image._ysize
-    except AttributeError:
-        logger.debug("We were passed a numpy array without any cell sizes; "
-            "disabling write calls and returning result to user.")
-        write = False
+    kwargs['x_size'] = kwargs.get('x_size', array.shape[0])
+    kwargs['y_size'] = kwargs.get('y_size', array.shape[1])
 
     # format our Raster object as a numpy array
     
-    if _size is not None:
-        _footprint = gen_circular_array(_size, dtype=_dtype)
+    if kwargs['size'] is not None:
+        kwargs['footprint'] = gen_circular_array(kwargs['size'], dtype=kwargs['dtype'])
     try:
         # re-cast our user-provided, masked array with a zero fill-value
-        image.array = np.ma.masked_array(
-            image.array,
-            fill_value=0,
-            dtype=_intermediate_dtype)
+        if kwargs['use_disc_caching'] is True:
+            _array = NdArrayDiscCache(array)
+            array = _array.array     
+        array[:] = np.ma.masked_array(
+            array,
+            fill_value=0)[:]
         # and fill the numpy array with actual zeros before doing a moving windows analysis
-        image = np.ma.filled(
-            image.array,
-            fill_value=0)
-    except AttributeError as e:
+        array[:] = np.ma.filled(
+            array,
+            fill_value=0)[:]
+    except AttributeError:
         # otherwise, assume the user already supplied a properly formatted np.array
         pass
     
@@ -103,27 +85,16 @@ def ndimage_filter(image=None, outfile=None, **kwargs):
     # these can be used for the most common functions
     # we may encounter for moving windows analyses
 
-    image = ndimage.generic_filter(
-        input=image,
-        function=_function,
-        footprint=_footprint)
+    array[:] = ndimage.generic_filter(
+        input=array,
+        function=kwargs['function'],
+        footprint=kwargs['footprint'])[:]
 
-    logger.debug("Filter result : \n\n%s\n", image)
-    logger.debug("Cumulative sum : %s", image.cumsum())
+    logger.debug("Filter result : \n\n%s\n", array)
+    logger.debug("Cumulative sum : %s", array.cumsum())
     
-    # either save to disk or return to user
-    if write:
-        r = Raster(array = np.array(image))
-        r._xsize = _xsize
-        r._ysize = _ysize
-        r.filename = outfile
-        try:
-            r.write()
-        except AttributeError as e:
-            r.write(filename=outfile)
-        except Exception as e:
-            logger.debug("%s doesn't appear to be a Raster object; "
-                           "returning result to user", e)
-            return image
+    if kwargs['use_disc_caching'] is True:
+        _array.array[:] = array[:]
+        return(_array)
     else:
-        return image
+        return(array)
