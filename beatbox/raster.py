@@ -371,7 +371,7 @@ class Raster(object):
         self.crs = []
         self.crs_wkt = []
         self.geot = None
-        self._use_disc_caching = None
+        self._use_disc_caching = False
         self._disc_cache_file = None
 
         # allow for an empty specification by user
@@ -379,9 +379,10 @@ class Raster(object):
             self._builder(kwargs)
 
     def __del__(self):
-        logger.debug("Attempting removing local numpy disc caching file: " + self._disc_cache_file)
-        if _is_valid_path(self._disc_cache_file):
-            os.remove(self._disc_cache_file)
+        if self._use_disc_caching:
+            logger.debug("Attempting removing local numpy disc caching file: " + self._disc_cache_file)
+            if _is_valid_path(self._disc_cache_file):
+                os.remove(self._disc_cache_file)
 
     def _builder(self, config):
         if _is_valid_path(config.get('input')):
