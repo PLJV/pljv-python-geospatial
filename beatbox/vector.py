@@ -104,7 +104,8 @@ class Geometries(object):
             self._geometries = [shape(ft['geometry']) for ft in list(args[0])]
         except AttributeError:
             logger.debug(
-                "Failed to process shapely geometries from input: %s -- trying direct assignment.", args[0])
+                "Failed to process shapely geometries from input: %s --" + 
+                " trying direct assignment.", args[0])
             self._geometries = args[0]
 
 
@@ -129,8 +130,8 @@ class Attributes(object):
             self._attributes = pd.DataFrame(
                 [dict(item['properties']) for item in list(args[0])])
         except AttributeError:
-            logger.debug(
-                "Failed to process attribute table as a pandas DataFrame: %s -- trying direct assignment.", args[0])
+            logger.debug("Failed to process attribute table as a pandas " +
+                "DataFrame: %s -- trying direct assignment.", args[0])
             self._attributes = args[0]
 
 
@@ -140,8 +141,10 @@ class EeAttributes(Attributes):
 
 class Vector(object):
     def __init__(self, input=None, options=None):
-        """Builder class that handles file input/output operations for shapefiles using fiona and shapely 
-           built-ins and performs select spatial modifications on vector datasets
+        """
+        Builder class that handles file input/output operations for shapefiles
+        using fiona and shapely built-ins and performs select spatial modifications 
+        on vector datasets
 
         Keyword arguments:
         filename= the full path filename to a vector dataset (typically a .shp file).
