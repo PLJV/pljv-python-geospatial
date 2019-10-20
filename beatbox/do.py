@@ -13,11 +13,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class Backend(object):
     """
     Default backend interface
     """
-    _backend_code = {'local': 0, 'ee': 1}
+
+    _backend_code = {"local": 0, "ee": 1}
     _what = None
     _with = None
 
@@ -48,11 +50,13 @@ class Do(Backend):
                 self._with = args[1]
                 args = args[:2]
             except IndexError:
-                raise IndexError("this=, that= are empty and we failed to ",
-                                 "parse any positional arguments")
+                raise IndexError(
+                    "this=, that= are empty and we failed to ",
+                    "parse any positional arguments",
+                )
         else:
-            self._what = this # run function
-            self._with = that # Currently EE or Local are supported
+            self._what = this  # run function
+            self._with = that  # Currently EE or Local are supported
         self._using = self._unpack_with_arguments(*args)
 
     def _unpack_with_arguments(self, *args, **kwargs):
@@ -87,11 +91,13 @@ class Do(Backend):
         :return:
         """
         try:
-            self._what = args[0]['what']
-            self._with = args[0]['with']
+            self._what = args[0]["what"]
+            self._with = args[0]["with"]
         except KeyError as e:
-            logger.exception("run= accepts a dict as a single positional argument specifying "
-                             "'what' and 'with' keys : %s", e)
+            logger.exception(
+                "run= accepts a dict as a single positional argument specifying "
+                "'what' and 'with' keys : %s",
+                e,
+            )
             raise KeyError()
         self._unpack_with_arguments()
-

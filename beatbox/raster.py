@@ -13,7 +13,7 @@ et al only where needed.
 
 __author__ = "Kyle Taylor"
 __copyright__ = "Copyright 2019, Playa Lakes Joint Venture"
-__credits__ = ["Kyle Taylor", "Alex Daniels", "Meghan Bogaerts","Stephen Chang"]
+__credits__ = ["Kyle Taylor", "Alex Daniels", "Meghan Bogaerts", "Stephen Chang"]
 __license__ = "GPL"
 __version__ = "3"
 __maintainer__ = "Kyle Taylor"
@@ -30,21 +30,24 @@ import sys, os
 import re
 from random import randint
 from copy import copy
+
 # raster manipulation
 from georasters import GeoRaster, get_geo_info, create_geotiff, merge
 import gdalnumeric
 import gdal
 import numpy as np
 from osgeo import gdal_array
+
 # memory profiling
 import types
 import psutil
+
 # beatbox
 from .network import PostGis
 
 _DEFAULT_NA_VALUE = 65535
 _DEFAULT_DTYPE = np.uint16
-_DEFAULT_RASTER_FORMAT = gdal.GetDriverByName('GTiff')
+_DEFAULT_RASTER_FORMAT = gdal.GetDriverByName("GTiff")
 
 # short-hand string identifiers for numpy
 # types. Int, float, and byte will be the
@@ -52,20 +55,21 @@ _DEFAULT_RASTER_FORMAT = gdal.GetDriverByName('GTiff')
 # gang is all here
 
 _NUMPY_TYPES = {
-  "int": np.intc,
-  "uint8": np.uint8,
-  "int8": np.uint8,
-  "byte": np.int8,
-  "int16": np.int16,
-  "int32": np.int32,
-  "uint16": np.uint16,
-  "uint32": np.uint32,
-  "float": np.single,
-  "float32": np.float32,
-  "float64": np.float64,
-  "complex64": np.complex64,
-  "complex128": np.complex128
+    "int": np.intc,
+    "uint8": np.uint8,
+    "int8": np.uint8,
+    "byte": np.int8,
+    "int16": np.int16,
+    "int32": np.int32,
+    "uint16": np.uint16,
+    "uint32": np.uint32,
+    "float": np.single,
+    "float32": np.float32,
+    "float64": np.float64,
+    "complex64": np.complex64,
+    "complex128": np.complex128,
 }
+
 
 def _split(raster=None, n=None):
     """
@@ -78,13 +82,10 @@ def _split(raster=None, n=None):
     # args[0]/raster=
     if raster is None:
         raise IndexError("invalid raster= argument specified")
-    #args[1]/n=
+    # args[1]/n=
     if n is None:
         raise IndexError("invalid n= argument specified")
-    return np.array_split(
-        np.array(raster.array, dtype=str(raster.array.data.dtype)),
-        n
-    )
+    return np.array_split(np.array(raster.array, dtype=str(raster.array.data.dtype)), n)
 
 
 def _ram_sanity_check(array=None):
@@ -95,14 +96,11 @@ def _ram_sanity_check(array=None):
     :return dict:
     """
     if array is None:
-        raise IndexError("first pos. argument should be some kind of "
-                         "raster data")
+        raise IndexError("first pos. argument should be some kind of " "raster data")
 
     _cost = _est_free_ram() - _est_array_size(array)
-    return {
-        'available': bool(_cost > 0),
-        'bytes': int(_cost)
-    }
+    return {"available": bool(_cost > 0), "bytes": int(_cost)}
+
 
 def _no_data_value_sanity_check(obj=None):
     """ Checks a Raster object for a sane no data value. Occasionally a
@@ -111,12 +109,15 @@ def _no_data_value_sanity_check(obj=None):
     stated data type (unsigned integer). Returns a sane no data value
     and a warning, or the original value if is good to use.
     """
-    if str(obj.dtype).find('u') is not -1: # are we unsigned?
+    if str(obj.dtype).find("u") is not -1:  # are we unsigned?
         if obj.ndv < 0:
-            logger.warning("no data value for raster object is less-than 0,"
-                "but our data type is unsigned. Forcing a no data value of 0.")
-            return(0)
-    return(obj.ndv)
+            logger.warning(
+                "no data value for raster object is less-than 0,"
+                "but our data type is unsigned. Forcing a no data value of 0."
+            )
+            return 0
+    return obj.ndv
+
 
 def _est_free_ram():
     """ Determines the amount of free ram available for an operation. 
@@ -147,8 +148,10 @@ def _est_array_size(obj=None, byte_size=None, dtype=None):
     if dtype is not None:
         _byte_size = sys.getsizeof(_to_numpy_type(dtype))
     else:
-        raise IndexError("couldn't assign a default data type and an invalid"
-                         " dtype= argument specified")
+        raise IndexError(
+            "couldn't assign a default data type and an invalid"
+            " dtype= argument specified"
+        )
     return _array_len * _byte_size
 
 
@@ -159,12 +162,12 @@ def _process_blockwise(*args):
     :param np.array np.array: NumPy array object
     :return:
     """
-    _array = args[0].raster   # numpy array
-    _rows = _array.shape[0]   # rows in array
-    _n_chunks = 1             # how many blocks (rows) per chunk?
+    _array = args[0].raster  # numpy array
+    _rows = _array.shape[0]  # rows in array
+    _n_chunks = 1  # how many blocks (rows) per chunk?
     """Yield successive n-sized chunks from 0-to-nrow."""
     for i in range(0, _rows, _n_chunks):
-        yield _array[i:i + _n_chunks]
+        yield _array[i : i + _n_chunks]
 
 
 def _is_raster(obj=None):
@@ -176,6 +179,7 @@ def _is_raster(obj=None):
     except:
         return False
 
+
 def _is_array(obj=None):
     try:
         if isinstance(obj, np.ma.core.MaskedArray):
@@ -185,6 +189,7 @@ def _is_array(obj=None):
     except Exception:
         return False
 
+
 def _is_number(num_list=None):
     """
     Determine whether any item in a list is not a number.
@@ -192,8 +197,10 @@ def _is_number(num_list=None):
     :return: True on all integers,
     """
     try:
-        if np.sum([not(isinstance(i, int) or isinstance(i, float))
-                   for i in num_list]) > 0:
+        if (
+            np.sum([not (isinstance(i, int) or isinstance(i, float)) for i in num_list])
+            > 0
+        ):
             return False
         else:
             return True
@@ -211,6 +218,7 @@ def _is_wkt_str(wkt=None, *args):
     """
     raise NotImplementedError
 
+
 def _is_valid_path(path):
     _is_valid = False
     try:
@@ -223,20 +231,32 @@ def _is_valid_path(path):
 
     return _is_valid
 
+
 def slope(array=None, use_disc_caching=True):
     if use_disc_caching is True:
-        x, y, slp = NdArrayDiscCache(array), NdArrayDiscCache(array), NdArrayDiscCache(array)
+        x, y, slp = (
+            NdArrayDiscCache(array),
+            NdArrayDiscCache(array),
+            NdArrayDiscCache(array),
+        )
         x.array[:], y.array[:] = np.gradient(array)[:]
-        slp.array[:] = np.pi/2. - np.arctan(np.sqrt(x.array*x.array + y.array*y.array))[:]
+        slp.array[:] = (
+            np.pi / 2.0 - np.arctan(np.sqrt(x.array * x.array + y.array * y.array))[:]
+        )
         del x, y
         return slp
     else:
         x, y = np.gradient(array)
-        return np.pi/2. - np.arctan(np.sqrt(x*x + y*y))
+        return np.pi / 2.0 - np.arctan(np.sqrt(x * x + y * y))
+
 
 def aspect(array=None, use_disc_caching=True):
     if use_disc_caching is True:
-        x, y, asp = NdArrayDiscCache(array), NdArrayDiscCache(array), NdArrayDiscCache(array)
+        x, y, asp = (
+            NdArrayDiscCache(array),
+            NdArrayDiscCache(array),
+            NdArrayDiscCache(array),
+        )
         x.array[:], y.array[:] = np.gradient(array)[:]
         asp.array[:] = np.arctan2(-x.array, y.array)[:]
         del x, y
@@ -244,6 +264,7 @@ def aspect(array=None, use_disc_caching=True):
     else:
         x, y = np.gradient(array)
         return np.arctan2(-x, y)
+
 
 class NdArrayDiscCache(object):
     def __init__(self, input=None, **kwargs):
@@ -256,47 +277,61 @@ class NdArrayDiscCache(object):
         :param str y_size: Number of cells (y-axis) to use for our array cache
         """
         self.disc_cache_file = os.path.abspath(
-            kwargs.get('cache_filename', str(randint(1, 9E09)) + '_np_array.dat')
+            kwargs.get("cache_filename", str(randint(1, 9e09)) + "_np_array.dat")
         )
 
-        self.dtype = kwargs.get('dtype', _DEFAULT_DTYPE)
-        
-        self.x_size = kwargs.get('x_size', None)
-        self.y_size = kwargs.get('y_size', None)
-        
-        self.ndv = kwargs.get('ndv', _DEFAULT_NA_VALUE)
+        self.dtype = kwargs.get("dtype", _DEFAULT_DTYPE)
 
-        logger.debug("Using disc caching file for large numpy array: " + self.disc_cache_file)
+        self.x_size = kwargs.get("x_size", None)
+        self.y_size = kwargs.get("y_size", None)
+
+        self.ndv = kwargs.get("ndv", _DEFAULT_NA_VALUE)
+
+        logger.debug(
+            "Using disc caching file for large numpy array: " + self.disc_cache_file
+        )
 
         # if the user specified a valid file path or numpy array object, try to read it into our cache
         # but otherwise allow an empty specification
         if input is None:
             # by default, just create an empty cache file from the parameters specified by the user
             self.array = np.memmap(
-                filename=self.disc_cache_file, dtype=_to_numpy_type(self.dtype), mode='w+',
-                shape = (self.y_size, self.x_size)
+                filename=self.disc_cache_file,
+                dtype=_to_numpy_type(self.dtype),
+                mode="w+",
+                shape=(self.y_size, self.x_size),
             )
         else:
             if _is_valid_path(input):
-                logger.debug("Loading file contents into disc cache file:" + self.disc_cache_file)
+                logger.debug(
+                    "Loading file contents into disc cache file:" + self.disc_cache_file
+                )
                 _raster_file = gdal.Open(input)
                 self.array = np.memmap(
-                    filename=self.disc_cache_file, dtype=_to_numpy_type(self.dtype), mode='w+',
-                    shape = (_raster_file.RasterYSize, _raster_file.RasterXSize)
+                    filename=self.disc_cache_file,
+                    dtype=_to_numpy_type(self.dtype),
+                    mode="w+",
+                    shape=(_raster_file.RasterYSize, _raster_file.RasterXSize),
                 )
-                del _raster_file 
+                del _raster_file
                 self.array[:] = gdalnumeric.LoadFile(
                     filename=input,
-                    buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(_to_numpy_type(self.dtype))
+                    buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(
+                        _to_numpy_type(self.dtype)
+                    ),
                 )[:]
             else:
-                logger.debug("Treating input= object as numpy array object and reading into disc cache file:" + self.disc_cache_file)
+                logger.debug(
+                    "Treating input= object as numpy array object and reading into disc cache file:"
+                    + self.disc_cache_file
+                )
                 self.array = np.memmap(
-                    filename=self.disc_cache_file, dtype=input.dtype, mode='w+',
-                    shape = input.shape
+                    filename=self.disc_cache_file,
+                    dtype=input.dtype,
+                    mode="w+",
+                    shape=input.shape,
                 )
                 self.array[:] = input[:]
-
 
 
 class Gdal(object):
@@ -309,22 +344,22 @@ class Gdal(object):
         :param str wkt: A GDAL-formatted WKT string; e.g., that can be used to open rasters on a SQL server.
         :param bool use_disc_caching: Should we attempt to read our raster into RAM or should we cache it to disc? 
         """
-        self.filename = kwargs.get('file')
-        self.wkt = kwargs.get('wkt')
-        self.dtype = kwargs.get('dtype',_DEFAULT_DTYPE)
-        self.ndv = kwargs.get('ndv', _DEFAULT_NA_VALUE)
-        self.x_size = kwargs.get('x_size')
-        self.y_size = kwargs.get('y_size')
-        self.geot = kwargs.get('geot')
-        self.projection = kwargs.get('projection')
-        self.use_disc_caching = kwargs.get('use_disc_caching', False)
-        self.disc_cache_file = kwargs.get('disc_cache_file', None)
+        self.filename = kwargs.get("file")
+        self.wkt = kwargs.get("wkt")
+        self.dtype = kwargs.get("dtype", _DEFAULT_DTYPE)
+        self.ndv = kwargs.get("ndv", _DEFAULT_NA_VALUE)
+        self.x_size = kwargs.get("x_size")
+        self.y_size = kwargs.get("y_size")
+        self.geot = kwargs.get("geot")
+        self.projection = kwargs.get("projection")
+        self.use_disc_caching = kwargs.get("use_disc_caching", False)
+        self.disc_cache_file = kwargs.get("disc_cache_file", None)
 
         # allow for an empty specification
         if self.filename is not None:
             self.open()
         elif self.wkt is not None:
-            raise NotImplementedError('WKT string input is not supported yet')
+            raise NotImplementedError("WKT string input is not supported yet")
 
     def open(self):
         """
@@ -333,34 +368,42 @@ class Gdal(object):
         """
         # grab raster meta informationP from GeoRasters
         try:
-            self.ndv, self.x_size, self.y_size, self.geot, self.projection, self.dtype = \
-                get_geo_info(self.filename)
+            self.ndv, self.x_size, self.y_size, self.geot, self.projection, self.dtype = get_geo_info(
+                self.filename
+            )
         except Exception:
-            raise AttributeError("problem processing file input -- is this" +\
-                " a raster file?")
+            raise AttributeError(
+                "problem processing file input -- is this" + " a raster file?"
+            )
         # call gdal with explicit type specification
         # that will store in memory or as a disc cache, depending
         # on the state of our use_disc_caching property
         if self.use_disc_caching is True:
             # create a cache file and load file contents into the cache
-            _cached_file = NdArrayDiscCache(input=self.filename, dtype=self.dtype, x_size=self.x_size, y_size=self.y_size)
+            _cached_file = NdArrayDiscCache(
+                input=self.filename,
+                dtype=self.dtype,
+                x_size=self.x_size,
+                y_size=self.y_size,
+            )
             self.array = _cached_file.array
             self.disc_cache_file = _cached_file.disc_cache_file
         # by default, load the whole file into memory
         else:
             self.array = gdalnumeric.LoadFile(
                 filename=self.filename,
-                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(_to_numpy_type(self.dtype))
+                buf_type=gdal_array.NumericTypeCodeToGDALTypeCode(
+                    _to_numpy_type(self.dtype)
+                ),
             )
         # make sure we honor our no data value
         self.array = np.ma.masked_array(
-            self.array,
-            mask=self.array == self.ndv,
-            fill_value=self.ndv
+            self.array, mask=self.array == self.ndv, fill_value=self.ndv
         )
 
     def read_table(self, *args):
         raise NotImplementedError
+
 
 def _to_numpy_type(user_str):
     """
@@ -377,6 +420,7 @@ def _to_numpy_type(user_str):
             return _NUMPY_TYPES[valid_type_str]
     # default case
     return None
+
 
 class Raster(object):
     def __init__(self, input=None, **kwargs):
@@ -400,13 +444,16 @@ class Raster(object):
 
     def __del__(self):
         if self.use_disc_caching is True:
-            logger.debug("Attempting removing local numpy disc caching file: " + self.disc_cache_file)
+            logger.debug(
+                "Attempting removing local numpy disc caching file: "
+                + self.disc_cache_file
+            )
             if _is_valid_path(self.disc_cache_file):
                 os.remove(self.disc_cache_file)
 
     def _builder(self, input=None, config={}):
         if _is_valid_path(input):
-            _kwargs = { 'file': input }
+            _kwargs = {"file": input}
             _kwargs.update(config)
             _raster = Gdal(**_kwargs)
             self.array = _raster.array
@@ -419,8 +466,7 @@ class Raster(object):
             _raster = input
             if _raster.use_disc_caching is True:
                 _cached_file = NdArrayDiscCache(
-                    input=_raster.array, 
-                    dtype=_raster.dtype
+                    input=_raster.array, dtype=_raster.dtype
                 )
                 self.array = _cached_file.array
                 self.disc_cache_file = _cached_file.disc_cache_file
@@ -446,7 +492,7 @@ class Raster(object):
             self.geot,
             nodata_value=self.ndv,
             projection=self.projection,
-            datatype=self.dtype
+            datatype=self.dtype,
         )
 
     def to_numpy_array(self):
