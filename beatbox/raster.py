@@ -71,22 +71,14 @@ _NUMPY_TYPES = {
 }
 
 
-def _split(raster=None, n=None):
+def _geot_to_affine(geot):
     """
-    Wrapper for np._array_split. Splits an input array into n (mostly)
-    equal segments, possibly for a parallelized operation.
-    :param np.array raster:
-    :param int n: number of splits to use for np.array_split 
-    :return:
+    Convert GDAL geo transform to affine, which is used more commonly
+    for specifying the configuration of raster datasets in newer 
+    frameworks like rasterio
     """
-    # args[0]/raster=
-    if raster is None:
-        raise IndexError("invalid raster= argument specified")
-    # args[1]/n=
-    if n is None:
-        raise IndexError("invalid n= argument specified")
-    return np.array_split(np.array(raster.array, dtype=str(raster.array.data.dtype)), n)
-
+    c, a, b, f, d, e = list(geot)
+    return rio.Affine(a, b, c, d, e, f)
 
 def _ram_sanity_check(array=None):
     """
@@ -265,6 +257,77 @@ def aspect(array=None, use_disc_caching=True):
         x, y = np.gradient(array)
         return np.arctan2(-x, y)
 
+    
+def split(array=None, n=None, **kwargs):
+    """
+    Wrapper for numpy array_split that can comprehend a Raster object.
+    Splits an input array into n (mostly) equal segments, possibly for 
+    a parallelized operation.
+    :param np.array raster:
+    :param int n: number of splits to use for np.array_split 
+    :return:
+    """
+    _kwargs = {}
+    
+    if isinstance(array, Raster):
+        _kwargs['ary'] = array.array
+    else:
+        _kwargs['ary'] = array
+    
+    _kwargs['indices_or_sections'] = n
+    
+    # args[0]/raster=
+    if raster is None:
+        raise IndexError("invalid raster= argument specified")
+    # args[1]/n=
+    if n is None:
+        raise IndexError("invalid n= argument specified")
+    return np.array_split(**_kwargs)
+
+
+def write_raster(array=None, filename=None, template=None, **kwargs):
+    """
+    Wrapper for rasterio that can write NumPy arrays to disc using an optional
+    Raster template object
+    """
+
+    kwargs["driver"] = kwargs.get("driver", "GTiff")
+    kwargs["dtype"] = kwargs.get("dtype", str(array.dtype))
+    kwargs["width"] = kwargs.get("width", array.shape[0])
+    kwargs["height"] = kwargs.get("height", array.shape[1])
+    kwargs["count"] = kwargs.get("count", 1)
+    kwargs["crs"] = kwargs.get("crs", None)
+    kwargs["transform"] = kwargs.get("transform", None)
+
+    if template is not None:
+        kwargs["transform"] = _geot_to_affine(template.geot)
+        kwargs["crs"] = template.projection.ExportToProj4()
+    if kwargs["crs"] is None:
+        logger.debug(
+            "crs= was not specified and cannot be determined from a "
+            + "numpy array; Resulting GeoTIFF will have no projection."
+        )
+    if kwargs["transform"] is None:
+        logger.debug(
+            "transform= was not specified; Resulting GeoTIFF will "
+            + "have an undefined affine transformation."
+        )
+
+    try:
+        with rio.open(filename, "w", **kwargs) as dst:
+            dst.write(array, 1)
+
+        return True
+
+    except FileNotFoundError:
+        logger.exception(
+            "FileNotFoundError in filename= argument of write_raster():"
+            + "This should not happen -- are you writing to a weird dir?"
+        )
+        return False
+
+    return False
+
 
 class NdArrayDiscCache(object):
     def __init__(self, input=None, **kwargs):
@@ -401,7 +464,10 @@ class Gdal(object):
             self.array, mask=self.array == self.ndv, fill_value=self.ndv
         )
 
-    def read_table(self, *args):
+    def write(self, **kwargs):
+        write_raster(array=self.array, filename=self.filename, template=kwargs.pop('template', None), **kwargs)
+        
+    def sql_read(self, *args):
         raise NotImplementedError
 
 
@@ -481,7 +547,7 @@ class Raster(object):
         self.dtype = _raster.dtype
         self.use_disc_caching = _raster.use_disc_caching
         self.disc_cache_file = _raster.disc_cache_file
-
+        
     def to_georaster(self):
         """ Parses internal Raster elements and returns as a clean GeoRaster
         object.

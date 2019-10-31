@@ -75,6 +75,25 @@ def _geom_units(*args):
         else:
             return _units
 
+def rasterize(obj, template=None, **kwargs):
+    """
+    Wrapper for rasterio.features.rasterize that will accept a geopandas
+    dataframe of features and burn the vector geometries using a Raster 
+    template object
+    """
+
+    kwargs["field"] = kwargs.get("field", 0)
+    kwargs["dtype"] = kwargs.get("dtype", template.array.dtype)
+
+    shapes = ((geom, value) for geom, value in zip(obj.geometry, obj[field]))
+
+    test = rio.features.rasterize(
+        shapes=shapes,
+        fill=0,
+        out=np.zeros(shape=template.array.shape, dtype=kwargs["dtype"]),
+        transform=_geot_to_affine(template.geot),
+    )
+        
 
 class Geometries(object):
     """
