@@ -1,38 +1,32 @@
 #!/usr/bin/env python3
-
 """
-Classes and modules implemented below are essentially wrappers
-around GDAL/Numpy primatives. Some higher-level hooks for GeoRasters 
-and Google Earth Engine are provided that allow easy access to 
-raster manipulations from these interfaces. The goal here is 
-not to re-invent the wheel. It's to lean-on the base 
-functionality of other frameworks where we can and use GDAL
-and NumPy as a base for extending the functionality of GeoRasters 
-et al only where needed.
+Wrappers for gdal, rasterio, and georasters useful for manipulating raster data
 """
-
 __author__ = "Kyle Taylor"
-__copyright__ = "Copyright 2019, Playa Lakes Joint Venture"
-__credits__ = ["Kyle Taylor", "Alex Daniels", "Meghan Bogaerts", "Stephen Chang"]
+__copyright__ = "Copyright 2019"
+__credits__ = ["Kyle Taylor"]
 __license__ = "GPL"
 __version__ = "3"
 __maintainer__ = "Kyle Taylor"
-__email__ = "kyle.taylor@pljv.org"
+__email__ = "kyle.a.taylor@gmail.com"
 __status__ = "Testing"
-
 # logging
 import logging
 
-logger = logging.getLogger(__name__)
-
+LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel(logging.INFO)
 # mmap file caching and file handling
-import sys, os
+import sys
+import os
+import subprocess
 import re
 from random import randint
 from copy import copy
+from pathlib import Path
 
 # raster manipulation
 from georasters import GeoRaster, get_geo_info, create_geotiff, merge
+import rasterio as rio
 import gdalnumeric
 import gdal
 import numpy as np
@@ -44,6 +38,8 @@ import psutil
 
 # beatbox
 from .network import PostGis
+
+gdal.UseExceptions()
 
 _DEFAULT_NA_VALUE = 65535
 _DEFAULT_DTYPE = np.uint16
@@ -71,7 +67,7 @@ _NUMPY_TYPES = {
 }
 
 
-def _geot_to_affine(geot):
+def geotransform_to_affine(geot):
     """
     Convert GDAL geo transform to affine, which is used more commonly
     for specifying the configuration of raster datasets in newer 
@@ -80,74 +76,55 @@ def _geot_to_affine(geot):
     c, a, b, f, d, e = list(geot)
     return rio.Affine(a, b, c, d, e, f)
 
-def _ram_sanity_check(array=None):
+
+def ram_sanity_check(array=None):
     """
     Determine if there is enough ram for an operation and return 
     the amount of ram available (in bytes) as a dictionary 
     :param np.array array: NumPy array 
     :return dict:
     """
-    if array is None:
-        raise IndexError("first pos. argument should be some kind of " "raster data")
-
-    _cost = _est_free_ram() - _est_array_size(array)
-    return {"available": bool(_cost > 0), "bytes": int(_cost)}
+    cost = est_free_ram() - est_array_size(array)
+    return {"available": bool(cost > 0), "bytes": int(cost)}
 
 
-def _no_data_value_sanity_check(obj=None):
-    """ Checks a Raster object for a sane no data value. Occasionally a
-    user-supplied raster file will contain a type-mismatch between the
-    raster's no data value (e.g., a value less-than 0) and it's
-    stated data type (unsigned integer). Returns a sane no data value
-    and a warning, or the original value if is good to use.
-    """
-    if str(obj.dtype).find("u") is not -1:  # are we unsigned?
-        if obj.ndv < 0:
-            logger.warning(
-                "no data value for raster object is less-than 0,"
-                "but our data type is unsigned. Forcing a no data value of 0."
-            )
-            return 0
-    return obj.ndv
-
-
-def _est_free_ram():
+def est_free_ram():
     """ Determines the amount of free ram available for an operation. 
     :return: int (free ram measured in bytes)
     """
     return psutil.virtual_memory().free
 
 
-def _est_array_size(obj=None, byte_size=None, dtype=None):
+def est_array_size(obj=None, byte_size=None, dtype=None):
     """ Estimate the total size (in bytes) an array-like object will consume
     :param args:
     :return:
     """
     # args[0] is a list containing array dimensions
     if isinstance(obj, list) or isinstance(obj, tuple):
-        _array_len = np.prod(obj)
+        array_len = np.prod(obj)
     elif isinstance(obj, GeoRaster):
         dtype = obj.datatype
-        _array_len = np.prod(obj.shape)
-        _byte_size = _to_numpy_type(obj.datatype)
+        array_len = np.prod(obj.shape)
+        byte_size = _to_numpy_type(obj.datatype)
     elif isinstance(obj, Raster):
         dtype = obj.array.dtype
-        _array_len = np.prod(obj.array.shape)
-        _byte_size = _to_numpy_type(obj.array.dtype)
+        array_len = np.prod(obj.array.shape)
+        byte_size = _to_numpy_type(obj.array.dtype)
     else:
-        _array_len = len(obj)
+        array_len = len(obj)
 
     if dtype is not None:
-        _byte_size = sys.getsizeof(_to_numpy_type(dtype))
+        byte_size = sys.getsizeof(_to_numpy_type(dtype))
     else:
         raise IndexError(
             "couldn't assign a default data type and an invalid"
             " dtype= argument specified"
         )
-    return _array_len * _byte_size
+    return array_len * byte_size
 
 
-def _process_blockwise(*args):
+def process_blockwise(*args):
     """
     Accepts an array object and splits it into chunks that can be handled
     stepwise
@@ -162,7 +139,7 @@ def _process_blockwise(*args):
         yield _array[i : i + _n_chunks]
 
 
-def _is_raster(obj=None):
+def is_raster(obj=None):
     try:
         if isinstance(obj, Raster):
             return True
@@ -172,7 +149,7 @@ def _is_raster(obj=None):
         return False
 
 
-def _is_array(obj=None):
+def is_array(obj=None):
     try:
         if isinstance(obj, np.ma.core.MaskedArray):
             return True
@@ -182,7 +159,7 @@ def _is_array(obj=None):
         return False
 
 
-def _is_number(num_list=None):
+def is_number(num_list=None):
     """
     Determine whether any item in a list is not a number.
     :param args[0]: a python list object
@@ -200,7 +177,7 @@ def _is_number(num_list=None):
         return False
 
 
-def _is_wkt_str(wkt=None, *args):
+def is_wkt_str(wkt=None, *args):
     """
     Returns a boolean if a user-provided string can be parsed by GDAL as WKT
 
@@ -209,19 +186,6 @@ def _is_wkt_str(wkt=None, *args):
     :rtype: Boolean
     """
     raise NotImplementedError
-
-
-def _is_valid_path(path):
-    _is_valid = False
-    try:
-        if os.path.exists(path):
-            _is_valid = True
-    except TypeError:
-        _is_valid = False
-    except ValueError:
-        _is_valid = False
-
-    return _is_valid
 
 
 def slope(array=None, use_disc_caching=True):
@@ -257,8 +221,8 @@ def aspect(array=None, use_disc_caching=True):
         x, y = np.gradient(array)
         return np.arctan2(-x, y)
 
-    
-def split(array=None, n=None, **kwargs):
+
+def array_split(array=None, n=None, **kwargs):
     """
     Wrapper for numpy array_split that can comprehend a Raster object.
     Splits an input array into n (mostly) equal segments, possibly for 
@@ -268,16 +232,16 @@ def split(array=None, n=None, **kwargs):
     :return:
     """
     _kwargs = {}
-    
+
     if isinstance(array, Raster):
-        _kwargs['ary'] = array.array
+        _kwargs["ary"] = array.array
     else:
-        _kwargs['ary'] = array
-    
-    _kwargs['indices_or_sections'] = n
-    
+        _kwargs["ary"] = array
+
+    _kwargs["indices_or_sections"] = n
+
     # args[0]/raster=
-    if raster is None:
+    if array is None:
         raise IndexError("invalid raster= argument specified")
     # args[1]/n=
     if n is None:
@@ -300,15 +264,15 @@ def write_raster(array=None, filename=None, template=None, **kwargs):
     kwargs["transform"] = kwargs.get("transform", None)
 
     if template is not None:
-        kwargs["transform"] = _geot_to_affine(template.geot)
+        kwargs["transform"] = geotransform_to_affine(template.geot)
         kwargs["crs"] = template.projection.ExportToProj4()
     if kwargs["crs"] is None:
-        logger.debug(
+        LOGGER.debug(
             "crs= was not specified and cannot be determined from a "
             + "numpy array; Resulting GeoTIFF will have no projection."
         )
     if kwargs["transform"] is None:
-        logger.debug(
+        LOGGER.debug(
             "transform= was not specified; Resulting GeoTIFF will "
             + "have an undefined affine transformation."
         )
@@ -320,13 +284,279 @@ def write_raster(array=None, filename=None, template=None, **kwargs):
         return True
 
     except FileNotFoundError:
-        logger.exception(
+        LOGGER.exception(
             "FileNotFoundError in filename= argument of write_raster():"
             + "This should not happen -- are you writing to a weird dir?"
         )
         return False
 
     return False
+
+
+def parse_band_descriptions(path):
+    """
+    Wrapper for gdal info that will parse the DESCRIPTION field of a
+    multi-band raster and return band names as an ordered list object
+    """
+    band_names = [
+        x for x in gdal.Info(path).split("\n") if re.search("Description =", x)
+    ]
+
+    return [b_str.split("= ")[1] for b_str in band_names]
+
+
+def append_prefix_to_filename(full_path, prefix=None):
+    """
+    Shorthand for Path.parts that accepts a full path to a file
+    and will append some user-specified prefix to the filename.
+    Returns modified full path as a Path object
+    """
+
+    if prefix is None:
+        prefix = "temp"
+
+    file_name = Path(full_path).name
+
+    root = Path(full_path).parts
+
+    if ":" in root[0]:
+        root = root[0] + "/".join(root[1 : len(root) - 1])
+    else:
+        root = root[0] + "/" + "/".join(root[1 : len(root) - 1])
+
+    dest = prefix + "_" + file_name
+    dest = Path(root + "/" + dest)
+
+    return dest
+
+
+def get_extent_params(full_path=None):
+    """
+    Fetches odds-and-ends about spatial configuration from
+    a raster image file
+    """
+
+    if full_path is None:
+        raise AttributeError("No full_path= argument supplied by user.")
+
+    full_path = str(Path(full_path))
+
+    image_file = gdal.Open(full_path)
+
+    upx, xres, xskew, upy, yskew, yres = image_file.GetGeoTransform()
+
+    # round to prevent strange pixel shifting in Albers --
+    # but note that 5 digits of precision still allows for specificity
+    # when working with decimal degrees
+    xres, yres = (round(xres, 5), round(yres, 5))
+
+    prj = image_file.GetProjection()
+
+    cols = image_file.RasterXSize
+    rows = image_file.RasterYSize
+
+    ulx = upx + 0 * xres + 0 * xskew
+    uly = upy + 0 * yskew + 0 * yres
+
+    llx = upx + 0 * xres + rows * xskew
+    lly = upy + 0 * yskew + rows * yres
+
+    lrx = upx + cols * xres + rows * xskew
+    lry = upy + cols * yskew + rows * yres
+
+    urx = upx + cols * xres + 0 * xskew
+    ury = upy + cols * yskew + 0 * yres
+
+    return {
+        "crs": prj,
+        "xy_res": [xres, yres],
+        # (minX, minY, maxX, maxY)
+        "bounding_box": [
+            min(ulx, llx, lrx, urx),
+            min(uly, lly, lry, ury),
+            max(ulx, llx, lrx, urx),
+            max(uly, lly, lry, ury),
+        ],
+        # for use with some instances of gdal.Translate
+        "corners": [ulx, uly, lrx, lry],
+        "transform": [upx, xres, xskew, upy, yskew, yres],
+    }
+
+
+def snap_geotransform(source_file=None, using=None, force_ul_corner=True):
+    """
+    Apply an X/Y offset to geotransform parameters extracted
+    from source= using the number of columns (X) and rows (Y)
+    in a to= raster. This is a conveinience function needed for 
+    'snapping' smaller source raster tiles to the extent of a 
+    larger raster grid.
+    """
+
+    # i.e., (smaller) source raster
+    source_gt = get_extent_params(source_file)["transform"]
+
+    # i.e., (larger) raster file to pull geo-transform parameters from
+    snap_gt = get_extent_params(using)["transform"]
+
+    x_off = int(source_gt[0] - snap_gt[0])
+    y_off = int(source_gt[3] - snap_gt[3])
+
+    if force_ul_corner:
+        # older software (ArcInfo) might not see
+        # the UL x,y coords as a centroid. This
+        # adjustment will force the x,y coordinates
+        # at the origin from center-of-pixel alignment
+        # to true-upper-left alignment
+        x_off = x_off - (0.5 * snap_gt[1])
+        y_off = y_off - (0.5 * snap_gt[5])
+
+    # return the geotransform parameters of our to (snap) grid,
+    # with the x/y coordinates of our UL pixel moved using our
+    # offset estimate
+    return [
+        snap_gt[0] + x_off,
+        snap_gt[1],
+        snap_gt[2],
+        snap_gt[3] + y_off,
+        snap_gt[4],
+        snap_gt[5],
+    ]
+
+
+def set_geotransform(destination_file=None, source_file=None):
+    """
+    Wrapper for SetGeoTransform that will open a target "to" file
+    and apply geotranform parameters take from a "from" file (e.g., 
+    an SDL snap layer). Assumes that gdalwarp has been called before
+    applying the geotransform.
+    """
+
+    if not isinstance(source_file, list):
+        # if source isn't a list, assume it's a raster file containing
+        # are target geotransform parameters
+        geotransform = get_extent_params(source_file)["transform"]
+    else:
+        # if a list was provided, assume it's a an explicit list of
+        # geotransform parameters
+        geotransform = source_file
+
+    try:
+        ds = gdal.Open(str(destination_file), gdal.GA_Update)
+        ds.SetGeoTransform(geotransform)
+        ds = None  # close our file handle
+    except Exception:
+        LOGGER.info(
+            "Warning:Error setting geotransform for file:" + str(destination_file)
+        )
+
+    del ds
+
+
+def define_projection(image, proj_file):
+    """
+    Wrapper for gdalwarp that will force a raster file into a given projection using
+    the WKT from a .prj file. This is roughly equivalent to "define projection" in ArcGIS and 
+    is only used because Earth Engine doesn't always report the correct projection for
+    exported assets
+    """
+    temp_file = append_prefix_to_filename(image, "reprojected")
+
+    command_args = [
+        str(sys.executable).replace(
+            "python", "gdalwarp"
+        ),  # full path to gdal_warp (from gdal_merge)
+        "-s_srs",
+        str(Path(proj_file)),
+        "-t_srs",
+        str(Path(proj_file)),
+        "-overwrite",
+        "-q",
+        str(Path(image)),  # source
+        str(Path(temp_file)),  # destination
+    ]
+
+    res = subprocess.call(command_args, shell=False)
+
+    if res != 0:
+        LOGGER.info("Gdalwarp encountered a runtime error for dest=" + str(image))
+
+    shutil.move(temp_file, image)
+
+    return Path(image)
+
+
+def snap_geotransform(source_file=None, using=None, force_ul_corner=True):
+    """
+    Apply an X/Y offset to geotransform parameters extracted
+    from source= using the number of columns (X) and rows (Y)
+    in a to= raster. This is a conveinience function needed for 
+    'snapping' smaller source raster tiles to the extent of a 
+    larger raster grid.
+    """
+
+    # i.e., (smaller) source tile
+    source_gt = get_extent_params(source_file)["transform"]
+
+    # i.e., (larger) snap grid
+    snap_gt = get_extent_params(using)["transform"]
+
+    x_off = int(source_gt[0] - snap_gt[0])
+    y_off = int(source_gt[3] - snap_gt[3])
+
+    if force_ul_corner:
+        # older software (ArcInfo) might not see
+        # the UL x,y coords as a centroid. This
+        # adjustment will force the x,y coordinates
+        # at the origin from center-of-pixel alignment
+        # to true-upper-left alignment
+        x_off = x_off - (0.5 * snap_gt[1])
+        y_off = y_off - (0.5 * snap_gt[5])
+
+    # return the geotransform parameters of our to (snap) grid,
+    # with the x/y coordinates of our UL pixel moved using our
+    # offset estimate
+    return [
+        snap_gt[0] + x_off,
+        snap_gt[1],
+        snap_gt[2],
+        snap_gt[3] + y_off,
+        snap_gt[4],
+        snap_gt[5],
+    ]
+
+
+def reproject(source_file, destination_file, extent_params):
+    """
+    Wrapper for gdalwarp that will reproject a source_file using the CRS string
+    provided by the user via extent_params
+    """
+    command_args = [
+        str(sys.executable).replace(
+            "python", "gdalwarp"
+        ),  # full path to gdal_warp (from gdal_merge)
+        "-t_srs",
+        extent_params["crs"],
+        "-tr",
+        extent_params["xy_res"][0],
+        extent_params["xy_res"][1],
+        "-tap",  # align our pixels with the source CRS
+        "-overwrite",
+        "-q",
+        str(Path(source_file)),  # source
+        str(Path(destination_file)),  # destination
+    ]
+
+    res = subprocess.call(command_args, shell=False)
+
+    if res != 0:
+        LOGGER.info(
+            "Gdalwarp encountered a runtime error for dest="
+            + str(destination_file)
+            + " and src="
+            + str(source_file)
+        )
+
+    return Path(destination_file)
 
 
 class NdArrayDiscCache(object):
@@ -350,7 +580,7 @@ class NdArrayDiscCache(object):
 
         self.ndv = kwargs.get("ndv", _DEFAULT_NA_VALUE)
 
-        logger.debug(
+        LOGGER.debug(
             "Using disc caching file for large numpy array: " + self.disc_cache_file
         )
 
@@ -365,8 +595,8 @@ class NdArrayDiscCache(object):
                 shape=(self.y_size, self.x_size),
             )
         else:
-            if _is_valid_path(input):
-                logger.debug(
+            if os.path.isfile(input):
+                LOGGER.debug(
                     "Loading file contents into disc cache file:" + self.disc_cache_file
                 )
                 _raster_file = gdal.Open(input)
@@ -384,7 +614,7 @@ class NdArrayDiscCache(object):
                     ),
                 )[:]
             else:
-                logger.debug(
+                LOGGER.debug(
                     "Treating input= object as numpy array object and reading into disc cache file:"
                     + self.disc_cache_file
                 )
@@ -465,8 +695,13 @@ class Gdal(object):
         )
 
     def write(self, **kwargs):
-        write_raster(array=self.array, filename=self.filename, template=kwargs.pop('template', None), **kwargs)
-        
+        write_raster(
+            array=self.array,
+            filename=self.filename,
+            template=kwargs.pop("template", None),
+            **kwargs
+        )
+
     def sql_read(self, *args):
         raise NotImplementedError
 
@@ -510,25 +745,25 @@ class Raster(object):
 
     def __del__(self):
         if self.use_disc_caching is True:
-            logger.debug(
+            LOGGER.debug(
                 "Attempting removing local numpy disc caching file: "
                 + self.disc_cache_file
             )
-            if _is_valid_path(self.disc_cache_file):
+            if os.path.isfile(self.disc_cache_file):
                 os.remove(self.disc_cache_file)
 
     def _builder(self, input=None, config={}):
-        if _is_valid_path(input):
+        if os.path.isfile(input):
             _kwargs = {"file": input}
             _kwargs.update(config)
             _raster = Gdal(**_kwargs)
             self.array = _raster.array
         # elif _is_wkt_str(config.get('input')):
         #     _raster = Gdal(wkt=config.get('input'))
-        elif _is_array(input):
+        elif is_array(input):
             _raster = Raster()
             _raster.array[:] = input[:]
-        elif _is_raster(input):
+        elif is_raster(input):
             _raster = input
             if _raster.use_disc_caching is True:
                 _cached_file = NdArrayDiscCache(
@@ -547,7 +782,7 @@ class Raster(object):
         self.dtype = _raster.dtype
         self.use_disc_caching = _raster.use_disc_caching
         self.disc_cache_file = _raster.disc_cache_file
-        
+
     def to_georaster(self):
         """ Parses internal Raster elements and returns as a clean GeoRaster
         object.

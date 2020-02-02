@@ -75,6 +75,7 @@ def _geom_units(*args):
         else:
             return _units
 
+
 def rasterize(obj, template=None, **kwargs):
     """
     Wrapper for rasterio.features.rasterize that will accept a geopandas
@@ -93,7 +94,7 @@ def rasterize(obj, template=None, **kwargs):
         out=np.zeros(shape=template.array.shape, dtype=kwargs["dtype"]),
         transform=_geot_to_affine(template.geot),
     )
-        
+
 
 class Geometries(object):
     """
