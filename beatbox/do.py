@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 __author__ = "Kyle Taylor"
 __copyright__ = "Copyright 2017, Playa Lakes Joint Venture"
@@ -11,7 +11,6 @@ __status__ = "Testing"
 
 import logging
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -19,17 +18,20 @@ class Backend(object):
     """
     Default backend interface
     """
-    _backend_code = {'local': 0, 'ee': 1}
+
+    _backend_code = {"local": 0, "ee": 1}
     _what = None
     _with = None
 
 
 class Local(Backend):
-    pass
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError
 
 
 class EE(Backend):
-    pass
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError
 
 
 class Do(Backend):
@@ -37,11 +39,10 @@ class Do(Backend):
         """
         Do is a dictcomp interface for performing arbitrary spatial tasks with
         Vector and Raster objects
-        :param this: run 'this' function
-        :param that: Backend class describing with 'this' function's
-        parameters
-        :param args: list of any additional positional arguments that are
-        passed to the 'this' function
+
+        :param function this: run 'this' function
+        :param class that: Backend class describing with 'this' function's parameters
+        :param list args: list of any additional positional arguments that are passed to the 'this' function
         """
         if this is None or that is None:
             try:
@@ -49,11 +50,13 @@ class Do(Backend):
                 self._with = args[1]
                 args = args[:2]
             except IndexError:
-                raise IndexError("this=, that= are empty and we failed to ",
-                                 "parse any positional arguments")
+                raise IndexError(
+                    "this=, that= are empty and we failed to ",
+                    "parse any positional arguments",
+                )
         else:
-            self._what = this # run function
-            self._with = that # Currently EE or Local are supported
+            self._what = this  # run function
+            self._with = that  # Currently EE or Local are supported
         self._using = self._unpack_with_arguments(*args)
 
     def _unpack_with_arguments(self, *args, **kwargs):
@@ -88,12 +91,13 @@ class Do(Backend):
         :return:
         """
         try:
-            self._what = args[0]['what']
-            self._with = args[0]['with']
-        except KeyError or IndexError as e:
-            raise KeyError("run= accepts a dict as a single positional argument specifying "
-                           "'what' and 'with' keys")
-        # determine what backend to use (or if the user specified
-        # backend is inappropriate for the given data)
+            self._what = args[0]["what"]
+            self._with = args[0]["with"]
+        except KeyError as e:
+            logger.exception(
+                "run= accepts a dict as a single positional argument specifying "
+                "'what' and 'with' keys : %s",
+                e,
+            )
+            raise KeyError()
         self._unpack_with_arguments()
-        self._guess_backend()

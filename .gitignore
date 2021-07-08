@@ -47,6 +47,10 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
+# Unit test intermediates
+*x*.tif
+*.aux.xml
+
 # Translations
 *.mo
 *.pot
@@ -75,6 +79,7 @@ target/
 
 # pyenv
 .python-version
+*.swp
 
 # celery beat schedule file
 celerybeat-schedule
